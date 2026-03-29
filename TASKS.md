@@ -5,6 +5,10 @@
 ### #1 — Make logo configurable in config.json
 Add a logo configuration option to `config.json` so the logo URL (currently hardcoded to Jaama's CDN URL in `default.aspx`) can be specified in config instead. The `check.ashx?action=apps` endpoint should expose the logo URL to the browser, and `default.aspx` should use it dynamically.
 
+### #5 — Create sample config and test harness for manual UI verification
+- `config.sample.json`: realistic sample with `logoHosting`, `logoCustomer`, 2 servers, 6 apps
+- `test-harness/index.html`: standalone dashboard — open directly in a browser, no IIS needed. Overrides `fetch()` to return mock data covering every pill state (200, 401, timeout, unreachable, 500, 404) and both logos via inline SVG data URIs. Includes a "test harness" badge in the header so it's visually distinct from production.
+
 ### #4 — Write unit tests for the health check probe logic
 Extracted probe logic from `check.ashx` into `App_Code/HttpProbe.cs`. Tests in `tests/HttpProbeTests.cs` use a real local `HttpListener` server (no mocks). Covers: 200/401/403/404/500 classification, HEAD→GET fallback (405/501), redirect following (301/302), unreachable, timeout, and elapsed time reporting.
 

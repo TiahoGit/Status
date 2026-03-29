@@ -1,0 +1,22 @@
+{
+  "site": "myapp.example.com",
+  "logoHosting": "https://example.com/hosting-logo.svg",
+  "logoCustomer": "https://example.com/customer-logo.svg",
+  "basePath": "",
+  "autoRefreshSeconds": 60,
+  "servers": [
+    { "name": "WEB-1", "host": "10.0.0.1", "port": 443, "scheme": "https" },
+    { "name": "WEB-2", "host": "10.0.0.2", "port": 443, "scheme": "https" }
+  ],
+  "applications": [
+    { "path": "/app1",  "label": "Customer Portal" },
+    { "path": "/app2",  "label": "Admin Panel" },
+    { "path": "/api",   "label": "REST API" },
+    { "path": "/auth",  "label": "Auth Service" },
+    { "path": "/jobs",  "label": "Background Jobs" },
+    { "path": "/docs",  "label": "Documentation" }
+  ],
+  "healthCheck": {
+    "timeoutMs": 8000
+  }
+}
