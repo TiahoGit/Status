@@ -5,6 +5,14 @@
 ### #1 — Make logo configurable in config.json
 Add a logo configuration option to `config.json` so the logo URL (currently hardcoded to Jaama's CDN URL in `default.aspx`) can be specified in config instead. The `check.ashx?action=apps` endpoint should expose the logo URL to the browser, and `default.aspx` should use it dynamically.
 
+### #7 — Add version number to project and display in footer
+- `config.json` / `config.sample.json`: added `"version": "1.0.0"` as the single source of truth
+- `App_Code/ConfigParser.cs`: added `ParseVersion(string json)` returning null if absent
+- `check.ashx`: exposes `version` via `?action=apps` response
+- `default.aspx`: footer shows `v1.0.0` loaded from config; hidden if version not set
+- `test-harness/index.html`: mock config includes version; footer updated to match
+- `tests/ConfigParserTests.cs`: 3 new tests covering value, absent, and pre-release label
+
 ### #5 — Create sample config and test harness for manual UI verification
 - `config.sample.json`: realistic sample with `logoHosting`, `logoCustomer`, 2 servers, 6 apps
 - `test-harness/index.html`: standalone dashboard — open directly in a browser, no IIS needed. Overrides `fetch()` to return mock data covering every pill state (200, 401, timeout, unreachable, 500, 404) and both logos via inline SVG data URIs. Includes a "test harness" badge in the header so it's visually distinct from production.

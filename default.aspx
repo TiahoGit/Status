@@ -207,6 +207,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 </div>
 
 <footer>
+  <span id="footer-version"></span>
   <span id="footer-host"></span>
 </footer>
 
@@ -369,6 +370,9 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
       btn.disabled = false; btn.textContent = '\u21BA Refresh'; running = false; return;
     }
 
+    var versionEl = document.getElementById('footer-version');
+    versionEl.textContent = CFG.version ? 'v' + CFG.version : '';
+
     var hostingEl  = document.getElementById('logo-hosting');
     var customerEl = document.getElementById('logo-customer');
     var dividerEl  = document.getElementById('logo-divider');
@@ -428,6 +432,8 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
   document.getElementById('footer-host').textContent = window.location.hostname + window.location.pathname;
   runChecks();
+
+  // Version is set after config loads — see runChecks()
 
 }());
 </script>

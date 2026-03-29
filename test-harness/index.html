@@ -190,6 +190,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 </div>
 
 <footer>
+  <span id="footer-version"></span>
   <span id="footer-host"></span>
   <span>mock data &mdash; no live server required</span>
 </footer>
@@ -217,6 +218,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
   // Mock config returned by ?action=apps
   var MOCK_CONFIG = {
+    version: '1.0.0',
     basePath: '',
     autoRefreshSeconds: 30,
     logoHosting:  LOGO_HOSTING,
@@ -427,6 +429,9 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
       showBanner('err', 'Failed to load configuration: ' + e.message);
       btn.disabled = false; btn.textContent = '\u21BA Refresh'; running = false; return;
     }
+
+    var versionEl  = document.getElementById('footer-version');
+    versionEl.textContent = CFG.version ? 'v' + CFG.version : '';
 
     var hostingEl  = document.getElementById('logo-hosting');
     var customerEl = document.getElementById('logo-customer');

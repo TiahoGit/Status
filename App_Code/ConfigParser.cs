@@ -42,6 +42,13 @@ public static class ConfigParser
         return m.Success ? Unescape(m.Groups[1].Value) : null;
     }
 
+    /// <summary>Returns the version string, or null if absent.</summary>
+    public static string ParseVersion(string json)
+    {
+        var m = Regex.Match(json, "\"version\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups[1].Value) : null;
+    }
+
     /// <summary>Returns basePath, or empty string if absent.</summary>
     public static string ParseBasePath(string json)
     {

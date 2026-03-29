@@ -116,15 +116,17 @@ public class StatusCheck : IHttpHandler
             return;
         }
 
-        var basePath    = ConfigParser.ParseBasePath(configJson);
-        var autoSecs    = ConfigParser.ParseAutoRefreshSeconds(configJson).ToString();
-        var logoHosting = ConfigParser.ParseLogoHosting(configJson);
+        var basePath     = ConfigParser.ParseBasePath(configJson);
+        var autoSecs     = ConfigParser.ParseAutoRefreshSeconds(configJson).ToString();
+        var version      = ConfigParser.ParseVersion(configJson);
+        var logoHosting  = ConfigParser.ParseLogoHosting(configJson);
         var logoCustomer = ConfigParser.ParseLogoCustomer(configJson);
 
         var sb = new StringBuilder();
         sb.Append("{");
         sb.Append("\"basePath\":"           + JS(basePath) + ",");
         sb.Append("\"autoRefreshSeconds\":" + autoSecs     + ",");
+        if (version      != null) sb.Append("\"version\":"      + JS(version)      + ",");
         if (logoHosting  != null) sb.Append("\"logoHosting\":"  + JS(logoHosting)  + ",");
         if (logoCustomer != null) sb.Append("\"logoCustomer\":" + JS(logoCustomer) + ",");
 
