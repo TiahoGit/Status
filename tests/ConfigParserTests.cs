@@ -26,22 +26,25 @@ public class ConfigParserTests
     [Test]
     public void ParseVersion_ReturnsVersionValue()
     {
-        var json = BaseConfig(@"""version"": ""1.2.3"",");
-        Assert.That(ConfigParser.ParseVersion(json), Is.EqualTo("1.2.3"));
+        Assert.That(ConfigParser.ParseVersion(@"{ ""version"": ""1.2.3"" }"), Is.EqualTo("1.2.3"));
     }
 
     [Test]
     public void ParseVersion_ReturnsNullWhenAbsent()
     {
-        var json = BaseConfig();
-        Assert.That(ConfigParser.ParseVersion(json), Is.Null);
+        Assert.That(ConfigParser.ParseVersion(@"{}"), Is.Null);
+    }
+
+    [Test]
+    public void ParseVersion_ReturnsNullWhenInputIsNull()
+    {
+        Assert.That(ConfigParser.ParseVersion(null), Is.Null);
     }
 
     [Test]
     public void ParseVersion_HandlesPreReleaseLabel()
     {
-        var json = BaseConfig(@"""version"": ""2.0.0-beta.1"",");
-        Assert.That(ConfigParser.ParseVersion(json), Is.EqualTo("2.0.0-beta.1"));
+        Assert.That(ConfigParser.ParseVersion(@"{ ""version"": ""2.0.0-beta.1"" }"), Is.EqualTo("2.0.0-beta.1"));
     }
 
     // ── ParseLogoHosting ──────────────────────────────────────────────────────

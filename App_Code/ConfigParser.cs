@@ -42,9 +42,10 @@ public static class ConfigParser
         return m.Success ? Unescape(m.Groups[1].Value) : null;
     }
 
-    /// <summary>Returns the version string, or null if absent.</summary>
+    /// <summary>Returns the version string, or null if absent or if json is null.</summary>
     public static string ParseVersion(string json)
     {
+        if (json == null) return null;
         var m = Regex.Match(json, "\"version\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
         return m.Success ? Unescape(m.Groups[1].Value) : null;
     }

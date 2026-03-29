@@ -118,7 +118,7 @@ public class StatusCheck : IHttpHandler
 
         var basePath     = ConfigParser.ParseBasePath(configJson);
         var autoSecs     = ConfigParser.ParseAutoRefreshSeconds(configJson).ToString();
-        var version      = ConfigParser.ParseVersion(configJson);
+        var version      = ConfigParser.ParseVersion(ReadVersionFile(ctx));
         var logoHosting  = ConfigParser.ParseLogoHosting(configJson);
         var logoCustomer = ConfigParser.ParseLogoCustomer(configJson);
 
@@ -265,6 +265,25 @@ public class StatusCheck : IHttpHandler
     private static string ReadConfig(HttpContext ctx)
     {
         return File.ReadAllText(ResolveConfigPath(ctx));
+    }
+
+    /// <summary>
+    /// Reads version.json from the application directory.
+    /// Returns null (without throwing) if the file is absent — version display is optional.
+    /// </summary>
+    private static string ReadVersionFile(HttpContext ctx)
+    {
+        try
+        {
+            var dir  = Path.GetDirectoryName(ctx.Request.PhysicalPath);
+            var path = Path.Combine(dir, "version.json");
+            if (File.Exists(path)) return File.ReadAllText(path);
+
+            var path2 = Path.Combine(ctx.Request.PhysicalApplicationPath.TrimEnd('\\'), "version.json");
+            if (File.Exists(path2)) return File.ReadAllText(path2);
+        }
+        catch { /* version is optional — never fail the response over it */ }
+        return null;
     }
 
     private static string ResolveConfigPath(HttpContext ctx)

@@ -1,5 +1,4 @@
 {
-  "version": "1.0.0",
   "site": "url.domain.com/optional-subfolder",
   "logoHosting": "https://example.com/hosting-logo.svg",
   "logoCustomer": "https://example.com/customer-logo.svg",
