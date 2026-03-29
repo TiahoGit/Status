@@ -1,0 +1,20 @@
+{
+  "site": "url.domain.com/optional-subfolder",
+  "basePath": "",
+  "autoRefreshSeconds": 60,
+  "servers": [
+    { "name": "SERVER-1", "host": "server-1.domain.com", "port": 443, "scheme": "https" },
+    { "name": "SERVER-2", "host": "server-2.domain.com", "port": 443, "scheme": "https" }
+  ],
+  "applications": [
+    { "path": "/app1", "label": "Application 1" },
+    { "path": "/app2", "label": "Application 2" },
+    { "path": "/app2", "label": "Application 3" },
+    { "path": "/app2", "label": "Application 4" },
+    { "path": "/app2", "label": "Application 5" },
+    { "path": "/app2", "label": "Application 6" }
+  ],
+  "healthCheck": {
+    "timeoutMs": 8000
+  }
+}
