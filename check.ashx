@@ -59,6 +59,13 @@ public class StatusCheck : IHttpHandler
             return;
         }
 
+        if (appPath.Contains(".."))
+        {
+            ctx.Response.StatusCode = 400;
+            ctx.Response.Write(Err("invalid path"));
+            return;
+        }
+
         string configJson;
         ConfigParser.ServerDef server;
         try
@@ -69,7 +76,7 @@ public class StatusCheck : IHttpHandler
         catch (Exception ex)
         {
             ctx.Response.StatusCode = 500;
-            ctx.Response.Write(Err("config error: " + ex.Message, ex.ToString()));
+            ctx.Response.Write(Err("config error: " + ex.Message));
             return;
         }
 
@@ -250,19 +257,17 @@ public class StatusCheck : IHttpHandler
         if (!r.NetworkError && (r.StatusCode == 301 || r.StatusCode == 302) && r.Location != null)
         {
             var r2 = DoRequest(r.Location, "GET", timeoutMs, nodeIp, port);
-            if (!r2.NetworkError) return FormatResult(r2, url);
+            if (!r2.NetworkError) return FormatResult(r2);
         }
-        return FormatResult(r, url);
+        return FormatResult(r);
     }
 
-    private static string FormatResult(ProbeResult r, string url)
+    private static string FormatResult(ProbeResult r)
     {
         if (r.NetworkError)
             return "{\"ok\":false" +
                    ",\"status\":"  + JS(r.ErrorCode) +
-                   ",\"ms\":"      + r.Ms +
-                   ",\"detail\":"  + JS(r.Detail) +
-                   ",\"url\":"     + JS(url) + "}";
+                   ",\"ms\":"      + r.Ms + "}";
 
         // 401/403 = app is up but requires authentication — treat as reachable
         var ok = (r.StatusCode >= 200 && r.StatusCode < 400)
@@ -271,8 +276,7 @@ public class StatusCheck : IHttpHandler
 
         return "{\"ok\":"     + (ok ? "true" : "false") +
                ",\"status\":" + r.StatusCode +
-               ",\"ms\":"     + r.Ms +
-               ",\"url\":"    + JS(url) + "}";
+               ",\"ms\":"     + r.Ms + "}";
     }
 
     private class ProbeResult
