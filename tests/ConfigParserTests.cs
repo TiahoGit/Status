@@ -100,6 +100,74 @@ public class ConfigParserTests
         Assert.That(ConfigParser.ParseLogoCustomer(json), Is.Null);
     }
 
+    // ── ParseBranding ─────────────────────────────────────────────────────────
+
+    [Test]
+    public void ParseBranding_ReturnsAllFieldsFromNestedObject()
+    {
+        var json = BaseConfig(@"""hosting"": { ""name"": ""Hosting Co"", ""logo"": ""https://h.example.com/logo.svg"", ""website"": ""https://h.example.com"" },");
+        var b = ConfigParser.ParseBranding(json, "hosting");
+        Assert.That(b,           Is.Not.Null);
+        Assert.That(b.Name,    Is.EqualTo("Hosting Co"));
+        Assert.That(b.Logo,    Is.EqualTo("https://h.example.com/logo.svg"));
+        Assert.That(b.Website, Is.EqualTo("https://h.example.com"));
+    }
+
+    [Test]
+    public void ParseBranding_ReturnsNullWhenNeitherNestedObjectNorLegacyFieldPresent()
+    {
+        var json = BaseConfig();
+        Assert.That(ConfigParser.ParseBranding(json, "hosting"),  Is.Null);
+        Assert.That(ConfigParser.ParseBranding(json, "customer"), Is.Null);
+    }
+
+    [Test]
+    public void ParseBranding_FallsBackToLegacyLogoHostingWhenNestedAbsent()
+    {
+        var json = BaseConfig(@"""logoHosting"": ""https://legacy.example.com/logo.svg"",");
+        var b = ConfigParser.ParseBranding(json, "hosting");
+        Assert.That(b,        Is.Not.Null);
+        Assert.That(b.Logo, Is.EqualTo("https://legacy.example.com/logo.svg"));
+        Assert.That(b.Name,    Is.Null);
+        Assert.That(b.Website, Is.Null);
+    }
+
+    [Test]
+    public void ParseBranding_FallsBackToLegacyLogoCustomerWhenNestedAbsent()
+    {
+        var json = BaseConfig(@"""logoCustomer"": ""https://legacy.example.com/cust.svg"",");
+        var b = ConfigParser.ParseBranding(json, "customer");
+        Assert.That(b,        Is.Not.Null);
+        Assert.That(b.Logo, Is.EqualTo("https://legacy.example.com/cust.svg"));
+    }
+
+    [Test]
+    public void ParseBranding_PrefersNestedLogoOverLegacyFallback()
+    {
+        var json = BaseConfig(@"""hosting"": { ""logo"": ""https://new.example.com/logo.svg"" }, ""logoHosting"": ""https://old.example.com/logo.svg"",");
+        var b = ConfigParser.ParseBranding(json, "hosting");
+        Assert.That(b.Logo, Is.EqualTo("https://new.example.com/logo.svg"));
+    }
+
+    [Test]
+    public void ParseBranding_ReturnsNameOnlyWhenNoLogoOrWebsite()
+    {
+        var json = BaseConfig(@"""hosting"": { ""name"": ""My Hosting"" },");
+        var b = ConfigParser.ParseBranding(json, "hosting");
+        Assert.That(b,          Is.Not.Null);
+        Assert.That(b.Name,    Is.EqualTo("My Hosting"));
+        Assert.That(b.Logo,    Is.Null);
+        Assert.That(b.Website, Is.Null);
+    }
+
+    [Test]
+    public void ParseBranding_ReturnsWebsiteWhenPresent()
+    {
+        var json = BaseConfig(@"""customer"": { ""name"": ""Cust Ltd"", ""website"": ""https://cust.example.com"" },");
+        var b = ConfigParser.ParseBranding(json, "customer");
+        Assert.That(b.Website, Is.EqualTo("https://cust.example.com"));
+    }
+
     // ── ParseBasePath ─────────────────────────────────────────────────────────
 
     [Test]

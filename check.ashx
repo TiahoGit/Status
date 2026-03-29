@@ -122,19 +122,33 @@ public class StatusCheck : IHttpHandler
             return;
         }
 
-        var basePath     = ConfigParser.ParseBasePath(configJson);
-        var autoSecs     = ConfigParser.ParseAutoRefreshSeconds(configJson).ToString();
-        var version      = ConfigParser.ParseVersion(ReadVersionFile(ctx));
-        var logoHosting  = ConfigParser.ParseLogoHosting(configJson);
-        var logoCustomer = ConfigParser.ParseLogoCustomer(configJson);
+        var basePath = ConfigParser.ParseBasePath(configJson);
+        var autoSecs = ConfigParser.ParseAutoRefreshSeconds(configJson).ToString();
+        var version  = ConfigParser.ParseVersion(ReadVersionFile(ctx));
+        var hosting  = ConfigParser.ParseBranding(configJson, "hosting");
+        var customer = ConfigParser.ParseBranding(configJson, "customer");
 
         var sb = new StringBuilder();
         sb.Append("{");
         sb.Append("\"basePath\":"           + JS(basePath) + ",");
         sb.Append("\"autoRefreshSeconds\":" + autoSecs     + ",");
-        if (version      != null) sb.Append("\"version\":"      + JS(version)      + ",");
-        if (logoHosting  != null) sb.Append("\"logoHosting\":"  + JS(logoHosting)  + ",");
-        if (logoCustomer != null) sb.Append("\"logoCustomer\":" + JS(logoCustomer) + ",");
+        if (version  != null) sb.Append("\"version\":" + JS(version) + ",");
+        if (hosting  != null)
+        {
+            var parts = new List<string>();
+            if (hosting.Name    != null) parts.Add("\"name\":"    + JS(hosting.Name));
+            if (hosting.Logo    != null) parts.Add("\"logo\":"    + JS(hosting.Logo));
+            if (hosting.Website != null) parts.Add("\"website\":" + JS(hosting.Website));
+            sb.Append("\"hosting\":{" + string.Join(",", parts) + "},");
+        }
+        if (customer != null)
+        {
+            var parts = new List<string>();
+            if (customer.Name    != null) parts.Add("\"name\":"    + JS(customer.Name));
+            if (customer.Logo    != null) parts.Add("\"logo\":"    + JS(customer.Logo));
+            if (customer.Website != null) parts.Add("\"website\":" + JS(customer.Website));
+            sb.Append("\"customer\":{" + string.Join(",", parts) + "},");
+        }
 
         // Server names only — no IPs, no hostnames
         sb.Append("\"servers\":[");
@@ -344,6 +358,13 @@ public static class ConfigParser
         public int    TimeoutMs;
     }
 
+    public class BrandingDef
+    {
+        public string Name;
+        public string Logo;
+        public string Website;
+    }
+
     // ── Top-level scalar fields ───────────────────────────────────────────────
 
     public static string ParseVersion(string json)
@@ -377,6 +398,39 @@ public static class ConfigParser
     {
         var m = Regex.Match(json, "\"autoRefreshSeconds\"\\s*:\\s*(\\d+)");
         return m.Success ? int.Parse(m.Groups[1].Value) : 60;
+    }
+
+    // ── Branding ──────────────────────────────────────────────────────────────
+
+    public static BrandingDef ParseBranding(string json, string key)
+    {
+        var nested  = ExtractObject(json, key);
+        var name    = nested != null ? JStr(nested, "name")    : null;
+        var logo    = nested != null ? JStr(nested, "logo")    : null;
+        var website = nested != null ? JStr(nested, "website") : null;
+
+        if (logo == null)
+        {
+            if (key == "hosting")  logo = ParseLogoHosting(json);
+            if (key == "customer") logo = ParseLogoCustomer(json);
+        }
+
+        if (name == null && logo == null && website == null) return null;
+        return new BrandingDef { Name = name, Logo = logo, Website = website };
+    }
+
+    private static string ExtractObject(string json, string key)
+    {
+        var m = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\\{");
+        if (!m.Success) return null;
+        int start = m.Index + m.Length - 1;
+        int depth = 0;
+        for (int i = start; i < json.Length; i++)
+        {
+            if      (json[i] == '{') depth++;
+            else if (json[i] == '}') { if (--depth == 0) return json.Substring(start, i - start + 1); }
+        }
+        return null;
     }
 
     // ── Servers ───────────────────────────────────────────────────────────────

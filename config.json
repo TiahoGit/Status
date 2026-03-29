@@ -1,7 +1,15 @@
 {
   "site": "url.domain.com/optional-subfolder",
-  "logoHosting": "https://example.com/hosting-logo.svg",
-  "logoCustomer": "https://example.com/customer-logo.svg",
+  "hosting": {
+    "name": "Hosting Co",
+    "logo": "https://example.com/hosting-logo.svg",
+    "website": "https://example.com"
+  },
+  "customer": {
+    "name": "Customer Ltd",
+    "logo": "https://example.com/customer-logo.svg",
+    "website": "https://customer.example.com"
+  },
   "basePath": "",
   "autoRefreshSeconds": 60,
   "servers": [

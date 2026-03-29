@@ -40,10 +40,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── header ── */
 header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:2rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border);gap:1rem;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:14px}
-.brand-logo{flex-shrink:0;height:36px;width:auto;transition:filter .2s}
+.brand-slot{display:flex;align-items:center;flex-shrink:0}
+.brand-slot a{display:flex;align-items:center;text-decoration:none}
+.brand-logo{height:36px;width:auto;transition:filter .2s}
 /* Dark logo SVG is white-on-transparent — invert to black for light mode */
 [data-theme="light"]  .brand-logo{filter:invert(1)}
 [data-theme="dark"]   .brand-logo{filter:none}
+.brand-name{font-size:15px;font-weight:500;color:var(--text)}
 .brand-text{display:flex;flex-direction:column;gap:3px}
 .brand-divider{width:1px;height:36px;background:var(--border-strong);flex-shrink:0}
 .brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
@@ -142,13 +145,13 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
 <header>
   <div class="brand">
-    <img id="logo-hosting" class="brand-logo" src="" alt="" style="display:none">
+    <div id="brand-hosting" class="brand-slot" style="display:none"></div>
     <div class="brand-text">
       <span class="brand-sub">Infrastructure</span>
       <h1>Application Status</h1>
     </div>
     <div class="brand-divider" id="logo-divider" style="display:none"></div>
-    <img id="logo-customer" class="brand-logo" src="" alt="" style="display:none">
+    <div id="brand-customer" class="brand-slot" style="display:none"></div>
   </div>
 
   <div class="header-right">
@@ -373,14 +376,11 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
     var versionEl = document.getElementById('footer-version');
     versionEl.textContent = CFG.version ? 'v' + CFG.version : '';
 
-    var hostingEl  = document.getElementById('logo-hosting');
-    var customerEl = document.getElementById('logo-customer');
-    var dividerEl  = document.getElementById('logo-divider');
-    if (CFG.logoHosting)  { hostingEl.src  = CFG.logoHosting;  hostingEl.style.display  = ''; }
-    else                  { hostingEl.style.display  = 'none'; }
-    if (CFG.logoCustomer) { customerEl.src = CFG.logoCustomer; customerEl.style.display = ''; }
-    else                  { customerEl.style.display = 'none'; }
-    dividerEl.style.display = (CFG.logoHosting && CFG.logoCustomer) ? '' : 'none';
+    renderBrandSlot('brand-hosting',  CFG.hosting);
+    renderBrandSlot('brand-customer', CFG.customer);
+    var hostingVisible  = !!(CFG.hosting  && (CFG.hosting.logo  || CFG.hosting.name));
+    var customerVisible = !!(CFG.customer && (CFG.customer.logo || CFG.customer.name));
+    document.getElementById('logo-divider').style.display = (hostingVisible && customerVisible) ? '' : 'none';
 
     buildHeader(CFG.servers);
     buildRows(CFG.applications, CFG.servers);
@@ -422,6 +422,17 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  function renderBrandSlot(id, b) {
+    var el = document.getElementById(id);
+    if (!b || (!b.logo && !b.name)) { el.style.display = 'none'; return; }
+    var inner = b.logo
+      ? '<img class="brand-logo" src="' + esc(b.logo) + '" alt="' + esc(b.name || '') + '">'
+      : '<span class="brand-name">'     + esc(b.name) + '</span>';
+    if (b.website) inner = '<a href="' + esc(b.website) + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>';
+    el.innerHTML = inner;
+    el.style.display = '';
+  }
+
   function showBanner(t, m) { var e = document.getElementById('banner-' + t); e.textContent = m; e.style.display = 'block'; }
   function hideBanner(t)    { document.getElementById('banner-' + t).style.display = 'none'; }
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
