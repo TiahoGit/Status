@@ -1,23 +1,30 @@
 <%@ WebHandler Language="C#" Class="StatusCheck" %>
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 
 /// <summary>
 /// Server-side health check proxy for the Application Status page.
+/// Self-contained — all helper classes (ConfigParser, HttpProbe) are inlined
+/// below so this file deploys without any App_Code dependency.
 /// .NET 4.0 compatible — synchronous IHttpHandler, HttpWebRequest only.
-/// No HttpClient, no async/await, no expression-bodied members.
+///
+/// GET check.ashx?action=apps
+///   -> sanitised config JSON (server names, app paths, logos, version)
 ///
 /// GET check.ashx?server=SERVER-1&path=/App1
-///   -> { "status": 200, "ms": 45, "url": "https://..." }
-///   -> { "status": "timeout", "ms": 8001, "url": "..." }
-///   -> { "status": "unreachable", "ms": 12, "detail": "...", "url": "..." }
+///   -> { "ok": true,  "status": 200,         "ms": 45  }
+///   -> { "ok": false, "status": "timeout",    "ms": 8001 }
+///   -> { "ok": false, "status": "unreachable","ms": 12  }
 ///
-/// GET check.ashx?debug=1
-///   -> full diagnostic JSON — config path, parsed servers, connectivity tests
+/// GET check.ashx?debug=1  (localhost only)
+///   -> full diagnostic JSON
 /// </summary>
 public class StatusCheck : IHttpHandler
 {
@@ -92,8 +99,7 @@ public class StatusCheck : IHttpHandler
         var path    = appPath.StartsWith("/") ? appPath : "/" + appPath;
         path        = Regex.Replace(path, "/+", "/");
 
-        var site   = server.Site;
-        var target = scheme + "://" + site + portSfx + path;
+        var target = scheme + "://" + server.Site + portSfx + path;
 
         ctx.Response.Write(FormatResult(HttpProbe.Probe(target, server.TimeoutMs, server.Host, port)));
     }
@@ -149,9 +155,9 @@ public class StatusCheck : IHttpHandler
             for (int i = 0; i < appObjects.Count; i++)
             {
                 if (i > 0) sb.Append(",");
-                var path  = ConfigParser.JStr(appObjects[i], "path");
+                var p     = ConfigParser.JStr(appObjects[i], "path");
                 var label = ConfigParser.JStr(appObjects[i], "label");
-                sb.Append("{\"path\":"  + JS(path) +
+                sb.Append("{\"path\":"  + JS(p) +
                           ",\"label\":" + JS(label) + "}");
             }
             sb.Append("]");
@@ -227,8 +233,8 @@ public class StatusCheck : IHttpHandler
                     var port    = s.Port > 0 ? s.Port : 443;
                     var portSfx = ((port == 443 && scheme == "https") || (port == 80 && scheme == "http")) ? "" : ":" + port;
                     var url     = scheme + "://" + s.Host + portSfx + "/";
-                    var result  = FormatResult(HttpProbe.Probe(url, 5000, s.Host, port));
-                    sb.Append("{\"server\":" + JS(s.Name) + ",\"url\":" + JS(url) + ",\"result\":" + result + "}");
+                    sb.Append("{\"server\":" + JS(s.Name) + ",\"url\":" + JS(url) +
+                              ",\"result\":"  + FormatResult(HttpProbe.Probe(url, 5000, s.Host, port)) + "}");
                 }
                 sb.Append("]");
             }
@@ -251,16 +257,16 @@ public class StatusCheck : IHttpHandler
     private static string FormatResult(HttpProbe.Result r)
     {
         if (r.NetworkError)
-            return "{\"ok\":false" +
-                   ",\"status\":" + JS(r.ErrorCode) +
-                   ",\"ms\":"     + r.Ms + "}";
+            return "{\"ok\":false"        +
+                   ",\"status\":"  + JS(r.ErrorCode) +
+                   ",\"ms\":"      + r.Ms + "}";
 
         return "{\"ok\":"     + (r.Ok ? "true" : "false") +
                ",\"status\":" + r.StatusCode +
                ",\"ms\":"     + r.Ms + "}";
     }
 
-    // ── Config ────────────────────────────────────────────────────────────────
+    // ── Config / version file reading ─────────────────────────────────────────
 
     private static string ReadConfig(HttpContext ctx)
     {
@@ -269,7 +275,7 @@ public class StatusCheck : IHttpHandler
 
     /// <summary>
     /// Reads version.json from the application directory.
-    /// Returns null (without throwing) if the file is absent — version display is optional.
+    /// Returns null without throwing if the file is absent — version is optional.
     /// </summary>
     private static string ReadVersionFile(HttpContext ctx)
     {
@@ -319,5 +325,237 @@ public class StatusCheck : IHttpHandler
     private static string Err(string msg)
     {
         return "{\"error\":" + JS(msg) + "}";
+    }
+}
+
+// ── ConfigParser ──────────────────────────────────────────────────────────────
+// Inlined here so check.ashx deploys as a single file with no App_Code dependency.
+// The canonical source lives in src/ConfigParser.cs and is used by the test project.
+
+public static class ConfigParser
+{
+    public class ServerDef
+    {
+        public string Name;
+        public string Host;      // node IP — TCP connection target
+        public string Site;      // public hostname — SNI and Host: header
+        public int    Port;
+        public string Scheme;
+        public int    TimeoutMs;
+    }
+
+    // ── Top-level scalar fields ───────────────────────────────────────────────
+
+    public static string ParseVersion(string json)
+    {
+        if (json == null) return null;
+        var m = Regex.Match(json, "\"version\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups[1].Value) : null;
+    }
+
+    public static string ParseLogoHosting(string json)
+    {
+        var m = Regex.Match(json, "\"logoHosting\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        if (m.Success) return Unescape(m.Groups[1].Value);
+        var fb = Regex.Match(json, "\"logo\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return fb.Success ? Unescape(fb.Groups[1].Value) : null;
+    }
+
+    public static string ParseLogoCustomer(string json)
+    {
+        var m = Regex.Match(json, "\"logoCustomer\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups[1].Value) : null;
+    }
+
+    public static string ParseBasePath(string json)
+    {
+        var m = Regex.Match(json, "\"basePath\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups[1].Value) : "";
+    }
+
+    public static int ParseAutoRefreshSeconds(string json)
+    {
+        var m = Regex.Match(json, "\"autoRefreshSeconds\"\\s*:\\s*(\\d+)");
+        return m.Success ? int.Parse(m.Groups[1].Value) : 60;
+    }
+
+    // ── Servers ───────────────────────────────────────────────────────────────
+
+    public static ServerDef FindServer(string json, string name)
+    {
+        foreach (var s in ParseServers(json))
+            if (string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))
+                return s;
+        return null;
+    }
+
+    public static ServerDef[] ParseServers(string json)
+    {
+        var timeoutMs = 8000;
+        var tm = Regex.Match(json, "\"timeoutMs\"\\s*:\\s*(\\d+)");
+        if (tm.Success) timeoutMs = int.Parse(tm.Groups[1].Value);
+
+        var siteMatch = Regex.Match(json, "\"site\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        var site      = siteMatch.Success ? Unescape(siteMatch.Groups[1].Value) : null;
+
+        var arrMatch = Regex.Match(json, "\"servers\"\\s*:\\s*(\\[.*?\\])", RegexOptions.Singleline);
+        if (!arrMatch.Success)
+            throw new InvalidOperationException("Could not find \"servers\" array in config.json");
+
+        var results = new List<ServerDef>();
+        foreach (var obj in SplitObjects(arrMatch.Groups[1].Value))
+        {
+            results.Add(new ServerDef
+            {
+                Name      = JStr(obj, "name"),
+                Host      = JStr(obj, "host"),
+                Site      = site,
+                Port      = JInt(obj, "port", 443),
+                Scheme    = Nvl(JStr(obj, "scheme"), "https"),
+                TimeoutMs = timeoutMs
+            });
+        }
+        return results.ToArray();
+    }
+
+    // ── JSON micro-parser ─────────────────────────────────────────────────────
+
+    public static List<string> SplitObjects(string block)
+    {
+        var list  = new List<string>();
+        int depth = 0, start = -1;
+        for (int i = 0; i < block.Length; i++)
+        {
+            if      (block[i] == '{') { if (depth++ == 0) start = i; }
+            else if (block[i] == '}') { if (--depth == 0 && start >= 0) { list.Add(block.Substring(start, i - start + 1)); start = -1; } }
+        }
+        return list;
+    }
+
+    public static string JStr(string obj, string key)
+    {
+        var m = Regex.Match(obj, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups[1].Value) : null;
+    }
+
+    public static int JInt(string obj, string key, int def)
+    {
+        var m = Regex.Match(obj, "\"" + Regex.Escape(key) + "\"\\s*:\\s*(\\d+)");
+        return m.Success ? int.Parse(m.Groups[1].Value) : def;
+    }
+
+    public static string Nvl(string a, string b) { return string.IsNullOrEmpty(a) ? b : a; }
+
+    private static string Unescape(string s) { return Regex.Unescape(s); }
+}
+
+// ── HttpProbe ─────────────────────────────────────────────────────────────────
+// Inlined here so check.ashx deploys as a single file with no App_Code dependency.
+// The canonical source lives in src/HttpProbe.cs and is used by the test project.
+
+public static class HttpProbe
+{
+    public class Result
+    {
+        public bool   Ok;
+        public bool   NetworkError;
+        public int    StatusCode;
+        public string ErrorCode;
+        public long   Ms;
+    }
+
+    private class RawResult
+    {
+        public bool   NetworkError;
+        public int    StatusCode;
+        public string ErrorCode;
+        public long   Ms;
+        public string Location;
+    }
+
+    public static Result Probe(string url, int timeoutMs, string nodeIp, int port)
+    {
+        var r = DoRequest(url, "HEAD", timeoutMs, nodeIp, port);
+        if (!r.NetworkError && (r.StatusCode == 405 || r.StatusCode == 501))
+            r = DoRequest(url, "GET", timeoutMs, nodeIp, port);
+        if (!r.NetworkError && (r.StatusCode == 301 || r.StatusCode == 302) && r.Location != null)
+        {
+            var r2 = DoRequest(r.Location, "GET", timeoutMs, nodeIp, port);
+            if (!r2.NetworkError) return ToResult(r2);
+        }
+        return ToResult(r);
+    }
+
+    private static RawResult DoRequest(string url, string method, int timeoutMs, string nodeIp, int port)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072
+                                                 | (SecurityProtocolType)768;
+            ServicePointManager.ServerCertificateValidationCallback =
+                delegate(object s, System.Security.Cryptography.X509Certificates.X509Certificate c,
+                         System.Security.Cryptography.X509Certificates.X509Chain ch,
+                         System.Net.Security.SslPolicyErrors e) { return true; };
+
+            var req = (HttpWebRequest)WebRequest.Create(url);
+            req.Method            = method;
+            req.Timeout           = timeoutMs;
+            req.AllowAutoRedirect = false;
+
+            if (!string.IsNullOrEmpty(nodeIp))
+            {
+                IPAddress ip;
+                if (IPAddress.TryParse(nodeIp, out ip))
+                {
+                    try
+                    {
+                        var endpoint = new IPEndPoint(ip, port);
+                        req.ServicePoint.BindIPEndPointDelegate =
+                            delegate(ServicePoint sp, IPEndPoint rem, int retryCount) { return endpoint; };
+                    }
+                    catch (PlatformNotSupportedException) { }
+                }
+            }
+
+            using (var resp = (HttpWebResponse)req.GetResponse())
+            {
+                sw.Stop();
+                return new RawResult
+                {
+                    NetworkError = false,
+                    StatusCode   = (int)resp.StatusCode,
+                    Location     = resp.Headers["Location"],
+                    Ms           = sw.ElapsedMilliseconds
+                };
+            }
+        }
+        catch (WebException ex)
+        {
+            sw.Stop();
+            if (ex.Response != null)
+            {
+                var code     = (int)((HttpWebResponse)ex.Response).StatusCode;
+                var location = ((HttpWebResponse)ex.Response).Headers["Location"];
+                return new RawResult { NetworkError = false, StatusCode = code, Location = location, Ms = sw.ElapsedMilliseconds };
+            }
+            var errCode = ex.Status == WebExceptionStatus.Timeout ? "timeout" : "unreachable";
+            return new RawResult { NetworkError = true, ErrorCode = errCode, Ms = sw.ElapsedMilliseconds };
+        }
+        catch (Exception)
+        {
+            sw.Stop();
+            return new RawResult { NetworkError = true, ErrorCode = "error", Ms = sw.ElapsedMilliseconds };
+        }
+    }
+
+    private static Result ToResult(RawResult r)
+    {
+        if (r.NetworkError)
+            return new Result { Ok = false, NetworkError = true, ErrorCode = r.ErrorCode, Ms = r.Ms };
+        var ok = (r.StatusCode >= 200 && r.StatusCode < 400)
+              || r.StatusCode == 401
+              || r.StatusCode == 403;
+        return new Result { Ok = ok, NetworkError = false, StatusCode = r.StatusCode, Ms = r.Ms };
     }
 }
