@@ -45,6 +45,7 @@ header{display:flex;align-items:flex-start;justify-content:space-between;margin-
 [data-theme="light"]  .brand-logo{filter:invert(1)}
 [data-theme="dark"]   .brand-logo{filter:none}
 .brand-text{display:flex;flex-direction:column;gap:3px}
+.brand-divider{width:1px;height:36px;background:var(--border-strong);flex-shrink:0}
 .brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
 h1{font-size:22px;font-weight:300;letter-spacing:-.02em}
 
@@ -141,11 +142,13 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
 <header>
   <div class="brand">
-    <img id="jaama-logo" class="brand-logo" src="" alt="">
+    <img id="logo-hosting" class="brand-logo" src="" alt="" style="display:none">
     <div class="brand-text">
       <span class="brand-sub">Infrastructure</span>
       <h1>Application Status</h1>
     </div>
+    <div class="brand-divider" id="logo-divider" style="display:none"></div>
+    <img id="logo-customer" class="brand-logo" src="" alt="" style="display:none">
   </div>
 
   <div class="header-right">
@@ -366,9 +369,14 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
       btn.disabled = false; btn.textContent = '\u21BA Refresh'; running = false; return;
     }
 
-    var logoEl = document.getElementById('jaama-logo');
-    if (CFG.logo) { logoEl.src = CFG.logo; logoEl.alt = CFG.logo; logoEl.style.display = ''; }
-    else          { logoEl.style.display = 'none'; }
+    var hostingEl  = document.getElementById('logo-hosting');
+    var customerEl = document.getElementById('logo-customer');
+    var dividerEl  = document.getElementById('logo-divider');
+    if (CFG.logoHosting)  { hostingEl.src  = CFG.logoHosting;  hostingEl.style.display  = ''; }
+    else                  { hostingEl.style.display  = 'none'; }
+    if (CFG.logoCustomer) { customerEl.src = CFG.logoCustomer; customerEl.style.display = ''; }
+    else                  { customerEl.style.display = 'none'; }
+    dividerEl.style.display = (CFG.logoHosting && CFG.logoCustomer) ? '' : 'none';
 
     buildHeader(CFG.servers);
     buildRows(CFG.applications, CFG.servers);

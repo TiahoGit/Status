@@ -235,15 +235,20 @@ public class StatusCheck : IHttpHandler
         var autoMatch = Regex.Match(configJson, "\"autoRefreshSeconds\"\\s*:\\s*(\\d+)");
         var autoSecs  = autoMatch.Success ? autoMatch.Groups[1].Value : "60";
 
-        var logoMatch = Regex.Match(configJson, "\"logo\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var logo      = logoMatch.Success ? logoMatch.Groups[1].Value : null;
+        var logoHostingMatch = Regex.Match(configJson, "\"logoHosting\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        var logoFallbackMatch = Regex.Match(configJson, "\"logo\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        var logoHosting  = logoHostingMatch.Success  ? logoHostingMatch.Groups[1].Value  :
+                           logoFallbackMatch.Success ? logoFallbackMatch.Groups[1].Value : null;
+
+        var logoCustomerMatch = Regex.Match(configJson, "\"logoCustomer\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        var logoCustomer = logoCustomerMatch.Success ? logoCustomerMatch.Groups[1].Value : null;
 
         var sb = new StringBuilder();
         sb.Append("{");
         sb.Append("\"basePath\":"          + JS(basePath) + ",");
         sb.Append("\"autoRefreshSeconds\":" + autoSecs    + ",");
-        if (logo != null)
-            sb.Append("\"logo\":"          + JS(logo)     + ",");
+        if (logoHosting  != null) sb.Append("\"logoHosting\":"  + JS(logoHosting)  + ",");
+        if (logoCustomer != null) sb.Append("\"logoCustomer\":" + JS(logoCustomer) + ",");
 
         // Server names only — no IPs, no hostnames
         sb.Append("\"servers\":[");

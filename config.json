@@ -1,6 +1,7 @@
 {
   "site": "url.domain.com/optional-subfolder",
-  "logo": "https://example.com/logo.svg",
+  "logoHosting": "https://example.com/hosting-logo.svg",
+  "logoCustomer": "https://example.com/customer-logo.svg",
   "basePath": "",
   "autoRefreshSeconds": 60,
   "servers": [
