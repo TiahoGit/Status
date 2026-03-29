@@ -1,9 +1,7 @@
 <%@ WebHandler Language="C#" Class="StatusCheck" %>
 
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -97,7 +95,7 @@ public class StatusCheck : IHttpHandler
         var site   = server.Site;
         var target = scheme + "://" + site + portSfx + path;
 
-        ctx.Response.Write(Probe(target, server.TimeoutMs, server.Host, port));
+        ctx.Response.Write(FormatResult(HttpProbe.Probe(target, server.TimeoutMs, server.Host, port)));
     }
 
     // ── Safe config endpoint — browser-facing, no internal details ───────────
@@ -227,7 +225,7 @@ public class StatusCheck : IHttpHandler
                     var port    = s.Port > 0 ? s.Port : 443;
                     var portSfx = ((port == 443 && scheme == "https") || (port == 80 && scheme == "http")) ? "" : ":" + port;
                     var url     = scheme + "://" + s.Host + portSfx + "/";
-                    var result  = Probe(url, 5000, s.Host, port);
+                    var result  = FormatResult(HttpProbe.Probe(url, 5000, s.Host, port));
                     sb.Append("{\"server\":" + JS(s.Name) + ",\"url\":" + JS(url) + ",\"result\":" + result + "}");
                 }
                 sb.Append("]");
@@ -246,112 +244,18 @@ public class StatusCheck : IHttpHandler
         ctx.Response.Write(sb.ToString());
     }
 
-    // ── HTTP probe — synchronous HttpWebRequest ───────────────────────────────
+    // ── Probe result serialisation ────────────────────────────────────────────
 
-    private static string Probe(string url, int timeoutMs, string nodeIp, int port)
-    {
-        var r = DoRequest(url, "HEAD", timeoutMs, nodeIp, port);
-        if (!r.NetworkError && (r.StatusCode == 405 || r.StatusCode == 501))
-            r = DoRequest(url, "GET", timeoutMs, nodeIp, port);
-        // Follow a single redirect (301/302) — IIS often redirects /app -> /app/
-        if (!r.NetworkError && (r.StatusCode == 301 || r.StatusCode == 302) && r.Location != null)
-        {
-            var r2 = DoRequest(r.Location, "GET", timeoutMs, nodeIp, port);
-            if (!r2.NetworkError) return FormatResult(r2);
-        }
-        return FormatResult(r);
-    }
-
-    private static string FormatResult(ProbeResult r)
+    private static string FormatResult(HttpProbe.Result r)
     {
         if (r.NetworkError)
             return "{\"ok\":false" +
-                   ",\"status\":"  + JS(r.ErrorCode) +
-                   ",\"ms\":"      + r.Ms + "}";
+                   ",\"status\":" + JS(r.ErrorCode) +
+                   ",\"ms\":"     + r.Ms + "}";
 
-        // 401/403 = app is up but requires authentication — treat as reachable
-        var ok = (r.StatusCode >= 200 && r.StatusCode < 400)
-              || r.StatusCode == 401
-              || r.StatusCode == 403;
-
-        return "{\"ok\":"     + (ok ? "true" : "false") +
+        return "{\"ok\":"     + (r.Ok ? "true" : "false") +
                ",\"status\":" + r.StatusCode +
                ",\"ms\":"     + r.Ms + "}";
-    }
-
-    private class ProbeResult
-    {
-        public bool   NetworkError;
-        public int    StatusCode;
-        public string ErrorCode;
-        public string Detail;
-        public long   Ms;
-        public string Location;
-    }
-
-    private static ProbeResult DoRequest(string url, string method, int timeoutMs, string nodeIp, int port)
-    {
-        var sw = Stopwatch.StartNew();
-        try
-        {
-            // TLS 1.2 — .NET 4.0 defaults to SSL3/TLS1.0
-            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072
-                                                 | (SecurityProtocolType)768;
-            // Accept internal CA / self-signed certs
-            ServicePointManager.ServerCertificateValidationCallback =
-                delegate(object s, System.Security.Cryptography.X509Certificates.X509Certificate c,
-                         System.Security.Cryptography.X509Certificates.X509Chain ch,
-                         System.Net.Security.SslPolicyErrors e) { return true; };
-
-            var req = (HttpWebRequest)WebRequest.Create(url);
-            req.Method            = method;
-            req.Timeout           = timeoutMs;
-            req.AllowAutoRedirect = false;
-
-            // Pin TCP connection to the node IP — SNI hostname comes from the URL
-            if (!string.IsNullOrEmpty(nodeIp))
-            {
-                IPAddress ip;
-                if (IPAddress.TryParse(nodeIp, out ip))
-                {
-                    var endpoint = new IPEndPoint(ip, port);
-                    req.ServicePoint.BindIPEndPointDelegate =
-                        delegate(ServicePoint sp, IPEndPoint rem, int retryCount)
-                        {
-                            return endpoint;
-                        };
-                }
-            }
-
-            using (var resp = (HttpWebResponse)req.GetResponse())
-            {
-                sw.Stop();
-                return new ProbeResult
-                {
-                    NetworkError = false,
-                    StatusCode   = (int)resp.StatusCode,
-                    Location     = resp.Headers["Location"],
-                    Ms           = sw.ElapsedMilliseconds
-                };
-            }
-        }
-        catch (WebException ex)
-        {
-            sw.Stop();
-            if (ex.Response != null)
-            {
-                var code     = (int)((HttpWebResponse)ex.Response).StatusCode;
-                var location = ((HttpWebResponse)ex.Response).Headers["Location"];
-                return new ProbeResult { NetworkError = false, StatusCode = code, Location = location, Ms = sw.ElapsedMilliseconds };
-            }
-            var errCode = ex.Status == WebExceptionStatus.Timeout ? "timeout" : "unreachable";
-            return new ProbeResult { NetworkError = true, ErrorCode = errCode, Detail = ex.Message, Ms = sw.ElapsedMilliseconds };
-        }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            return new ProbeResult { NetworkError = true, ErrorCode = "error", Detail = ex.Message, Ms = sw.ElapsedMilliseconds };
-        }
     }
 
     // ── Config ────────────────────────────────────────────────────────────────

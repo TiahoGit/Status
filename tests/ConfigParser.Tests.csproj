@@ -6,9 +6,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <!-- Include the shared parser directly so tests always compile against the same source -->
+  <!-- Include shared source directly so tests always compile against the same code -->
   <ItemGroup>
     <Compile Include="../App_Code/ConfigParser.cs" />
+    <Compile Include="../App_Code/HttpProbe.cs" />
   </ItemGroup>
 
   <ItemGroup>
