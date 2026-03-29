@@ -257,15 +257,6 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
     if (!Array.isArray(d.servers)      || !d.servers.length)      throw new Error('"servers" missing from app config');
     if (!Array.isArray(d.applications) || !d.applications.length) throw new Error('"applications" missing from app config');
     d.basePath = (d.basePath || '').replace(/\/+$/, '');
-
-    // Derive site path prefix from current URL (e.g. /test/Status/default.aspx -> /test)
-    // Used ONLY for display links — probe paths must NOT include this prefix
-    // as the backend nodes are not aware of the front-end routing path
-    var loc = window.location.pathname;
-    var statusIdx = loc.toLowerCase().lastIndexOf('/status/');
-    if (statusIdx === -1) statusIdx = loc.toLowerCase().lastIndexOf('/status');
-    d.sitePrefix = statusIdx > 0 ? loc.substring(0, statusIdx).replace(/\/+$/, '') : '';
-
     return d;
   }
 
@@ -283,9 +274,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
   function buildRows(apps, servers) {
     var tb = document.getElementById('tbody');
     tb.innerHTML = apps.map(function (app, ai) {
-      // Display link includes sitePrefix (e.g. /test/Key2)
-      // Probe path uses basePath only (e.g. /Key2) — backend nodes don't know about /test
-      var displayPath = joinPath(CFG.sitePrefix + CFG.basePath, app.path);
+      var displayPath = joinPath(CFG.basePath, app.path);
       var label = app.label ? '<span class="app-label">' + esc(app.label) + '</span>' : '';
       var tds = '<td class="td-app"><a href="' + esc(displayPath) + '" target="_blank">' + esc(displayPath) + '</a>' + label + '</td>';
       servers.forEach(function (_, si) {
