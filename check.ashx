@@ -1,7 +1,6 @@
 <%@ WebHandler Language="C#" Class="StatusCheck" %>
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -61,11 +60,11 @@ public class StatusCheck : IHttpHandler
         }
 
         string configJson;
-        ServerDef server;
+        ConfigParser.ServerDef server;
         try
         {
             configJson = ReadConfig(ctx);
-            server     = FindServer(configJson, serverName);
+            server     = ConfigParser.FindServer(configJson, serverName);
         }
         catch (Exception ex)
         {
@@ -81,20 +80,163 @@ public class StatusCheck : IHttpHandler
             return;
         }
 
-        var scheme  = Nvl(server.Scheme, "https");
+        var scheme  = ConfigParser.Nvl(server.Scheme, "https");
         var port    = server.Port > 0 ? server.Port : 443;
         var portSfx = ((port == 443 && scheme == "https") || (port == 80 && scheme == "http"))
                       ? "" : ":" + port;
         var path    = appPath.StartsWith("/") ? appPath : "/" + appPath;
         path        = Regex.Replace(path, "/+", "/");
 
-        // URL uses the site hostname (from "site" in config) for correct SNI + Host: header.
-        // TCP connection is pinned to the node IP (from "host" in config), bypassing DNS.
-        var site    = server.Site;
-        var target  = scheme + "://" + site + portSfx + path;
-        var timeout = server.TimeoutMs > 0 ? server.TimeoutMs : 8000;
+        var site   = server.Site;
+        var target = scheme + "://" + site + portSfx + path;
 
-        ctx.Response.Write(Probe(target, timeout, server.Host, port));
+        ctx.Response.Write(Probe(target, server.TimeoutMs, server.Host, port));
+    }
+
+    // ── Safe config endpoint — browser-facing, no internal details ───────────
+
+    private void HandleAppsConfig(HttpContext ctx)
+    {
+        string configJson;
+        ConfigParser.ServerDef[] servers;
+        try
+        {
+            configJson = ReadConfig(ctx);
+            servers    = ConfigParser.ParseServers(configJson);
+        }
+        catch (Exception ex)
+        {
+            ctx.Response.StatusCode = 500;
+            ctx.Response.Write(Err("config error: " + ex.Message));
+            return;
+        }
+
+        var basePath    = ConfigParser.ParseBasePath(configJson);
+        var autoSecs    = ConfigParser.ParseAutoRefreshSeconds(configJson).ToString();
+        var logoHosting = ConfigParser.ParseLogoHosting(configJson);
+        var logoCustomer = ConfigParser.ParseLogoCustomer(configJson);
+
+        var sb = new StringBuilder();
+        sb.Append("{");
+        sb.Append("\"basePath\":"           + JS(basePath) + ",");
+        sb.Append("\"autoRefreshSeconds\":" + autoSecs     + ",");
+        if (logoHosting  != null) sb.Append("\"logoHosting\":"  + JS(logoHosting)  + ",");
+        if (logoCustomer != null) sb.Append("\"logoCustomer\":" + JS(logoCustomer) + ",");
+
+        // Server names only — no IPs, no hostnames
+        sb.Append("\"servers\":[");
+        for (int i = 0; i < servers.Length; i++)
+        {
+            if (i > 0) sb.Append(",");
+            sb.Append("{\"name\":" + JS(servers[i].Name) + "}");
+        }
+        sb.Append("],");
+
+        // Applications — path and label only
+        var appsMatch = Regex.Match(configJson, "\"applications\"\\s*:\\s*(\\[.*?\\])",
+            RegexOptions.Singleline);
+        if (appsMatch.Success)
+        {
+            var appObjects = ConfigParser.SplitObjects(appsMatch.Groups[1].Value);
+            sb.Append("\"applications\":[");
+            for (int i = 0; i < appObjects.Count; i++)
+            {
+                if (i > 0) sb.Append(",");
+                var path  = ConfigParser.JStr(appObjects[i], "path");
+                var label = ConfigParser.JStr(appObjects[i], "label");
+                sb.Append("{\"path\":"  + JS(path) +
+                          ",\"label\":" + JS(label) + "}");
+            }
+            sb.Append("]");
+        }
+        else
+        {
+            sb.Append("\"applications\":[]");
+        }
+
+        sb.Append("}");
+        ctx.Response.Write(sb.ToString());
+    }
+
+    // ── Debug handler ─────────────────────────────────────────────────────────
+
+    private void HandleDebug(HttpContext ctx)
+    {
+        var sb = new StringBuilder();
+        sb.Append("{");
+        sb.Append("\"dotnetVersion\":"      + JS(Environment.Version.ToString()) + ",");
+        sb.Append("\"physicalAppPath\":"     + JS(ctx.Request.PhysicalApplicationPath) + ",");
+        sb.Append("\"handlerPhysicalPath\":" + JS(ctx.Request.PhysicalPath) + ",");
+
+        string configPath = null;
+        try
+        {
+            configPath = ResolveConfigPath(ctx);
+            sb.Append("\"configPath\":"   + JS(configPath) + ",");
+            sb.Append("\"configExists\":" + (File.Exists(configPath) ? "true" : "false") + ",");
+        }
+        catch (Exception ex)
+        {
+            sb.Append("\"configPathError\":" + JS(ex.Message) + ",");
+        }
+
+        string configJson = null;
+        if (configPath != null && File.Exists(configPath))
+        {
+            try
+            {
+                configJson = File.ReadAllText(configPath);
+                sb.Append("\"configRaw\":" + JS(configJson) + ",");
+            }
+            catch (Exception ex)
+            {
+                sb.Append("\"configReadError\":" + JS(ex.Message) + ",");
+            }
+        }
+
+        if (configJson != null)
+        {
+            try
+            {
+                var servers = ConfigParser.ParseServers(configJson);
+                sb.Append("\"parsedServers\":[");
+                for (int i = 0; i < servers.Length; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    sb.Append("{\"name\":"   + JS(servers[i].Name)   +
+                              ",\"host\":"   + JS(servers[i].Host)   +
+                              ",\"site\":"   + JS(servers[i].Site)   +
+                              ",\"port\":"   + servers[i].Port       +
+                              ",\"scheme\":" + JS(servers[i].Scheme) + "}");
+                }
+                sb.Append("],");
+
+                sb.Append("\"connectivityTests\":[");
+                for (int i = 0; i < servers.Length; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    var s       = servers[i];
+                    var scheme  = ConfigParser.Nvl(s.Scheme, "https");
+                    var port    = s.Port > 0 ? s.Port : 443;
+                    var portSfx = ((port == 443 && scheme == "https") || (port == 80 && scheme == "http")) ? "" : ":" + port;
+                    var url     = scheme + "://" + s.Host + portSfx + "/";
+                    var result  = Probe(url, 5000, s.Host, port);
+                    sb.Append("{\"server\":" + JS(s.Name) + ",\"url\":" + JS(url) + ",\"result\":" + result + "}");
+                }
+                sb.Append("]");
+            }
+            catch (Exception ex)
+            {
+                sb.Append("\"parseError\":" + JS(ex.Message));
+            }
+        }
+        else
+        {
+            sb.Append("\"parsedServers\":null,\"connectivityTests\":null");
+        }
+
+        sb.Append("}");
+        ctx.Response.Write(sb.ToString());
     }
 
     // ── HTTP probe — synchronous HttpWebRequest ───────────────────────────────
@@ -123,7 +265,6 @@ public class StatusCheck : IHttpHandler
                    ",\"url\":"     + JS(url) + "}";
 
         // 401/403 = app is up but requires authentication — treat as reachable
-        // 2xx/3xx = healthy, 4xx (excl 401/403) / 5xx = application error
         var ok = (r.StatusCode >= 200 && r.StatusCode < 400)
               || r.StatusCode == 401
               || r.StatusCode == 403;
@@ -164,8 +305,6 @@ public class StatusCheck : IHttpHandler
             req.AllowAutoRedirect = false;
 
             // Pin TCP connection to the node IP — SNI hostname comes from the URL
-            // so TLS handshake and Host: header both use the public hostname correctly.
-            // This lets us bypass DNS and hit each node directly without ARR or DNS entries.
             if (!string.IsNullOrEmpty(nodeIp))
             {
                 IPAddress ip;
@@ -211,161 +350,6 @@ public class StatusCheck : IHttpHandler
         }
     }
 
-    // ── Safe config endpoint — browser-facing, no internal details ───────────
-    private void HandleAppsConfig(HttpContext ctx)
-    {
-        string configJson;
-        ServerDef[] servers;
-        try
-        {
-            configJson = ReadConfig(ctx);
-            servers    = ParseServers(configJson);
-        }
-        catch (Exception ex)
-        {
-            ctx.Response.StatusCode = 500;
-            ctx.Response.Write(Err("config error: " + ex.Message));
-            return;
-        }
-
-        // Extract basePath, autoRefreshSeconds and logo from raw config
-        var basePathMatch = Regex.Match(configJson, "\"basePath\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var basePath      = basePathMatch.Success ? basePathMatch.Groups[1].Value : "";
-
-        var autoMatch = Regex.Match(configJson, "\"autoRefreshSeconds\"\\s*:\\s*(\\d+)");
-        var autoSecs  = autoMatch.Success ? autoMatch.Groups[1].Value : "60";
-
-        var logoHostingMatch = Regex.Match(configJson, "\"logoHosting\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var logoFallbackMatch = Regex.Match(configJson, "\"logo\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var logoHosting  = logoHostingMatch.Success  ? logoHostingMatch.Groups[1].Value  :
-                           logoFallbackMatch.Success ? logoFallbackMatch.Groups[1].Value : null;
-
-        var logoCustomerMatch = Regex.Match(configJson, "\"logoCustomer\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var logoCustomer = logoCustomerMatch.Success ? logoCustomerMatch.Groups[1].Value : null;
-
-        var sb = new StringBuilder();
-        sb.Append("{");
-        sb.Append("\"basePath\":"          + JS(basePath) + ",");
-        sb.Append("\"autoRefreshSeconds\":" + autoSecs    + ",");
-        if (logoHosting  != null) sb.Append("\"logoHosting\":"  + JS(logoHosting)  + ",");
-        if (logoCustomer != null) sb.Append("\"logoCustomer\":" + JS(logoCustomer) + ",");
-
-        // Server names only — no IPs, no hostnames
-        sb.Append("\"servers\":[");
-        for (int i = 0; i < servers.Length; i++)
-        {
-            if (i > 0) sb.Append(",");
-            sb.Append("{\"name\":" + JS(servers[i].Name) + "}");
-        }
-        sb.Append("],");
-
-        // Applications — path and label only
-        var appsMatch = Regex.Match(configJson, "\"applications\"\\s*:\\s*(\\[.*?\\])",
-            RegexOptions.Singleline);
-        if (appsMatch.Success)
-        {
-            var appObjects = SplitObjects(appsMatch.Groups[1].Value);
-            sb.Append("\"applications\":[");
-            for (int i = 0; i < appObjects.Count; i++)
-            {
-                if (i > 0) sb.Append(",");
-                var path  = JStr(appObjects[i], "path");
-                var label = JStr(appObjects[i], "label");
-                sb.Append("{\"path\":"  + JS(path) +
-                          ",\"label\":" + JS(label) + "}");
-            }
-            sb.Append("]");
-        }
-        else
-        {
-            sb.Append("\"applications\":[]");
-        }
-
-        sb.Append("}");
-        ctx.Response.Write(sb.ToString());
-    }
-
-    // ── Debug handler ─────────────────────────────────────────────────────────
-
-    private void HandleDebug(HttpContext ctx)
-    {
-        var sb = new StringBuilder();
-        sb.Append("{");
-        sb.Append("\"dotnetVersion\":"       + JS(Environment.Version.ToString()) + ",");
-        sb.Append("\"physicalAppPath\":"      + JS(ctx.Request.PhysicalApplicationPath) + ",");
-        sb.Append("\"handlerPhysicalPath\":"  + JS(ctx.Request.PhysicalPath) + ",");
-
-        string configPath = null;
-        try
-        {
-            configPath = ResolveConfigPath(ctx);
-            sb.Append("\"configPath\":"   + JS(configPath) + ",");
-            sb.Append("\"configExists\":" + (File.Exists(configPath) ? "true" : "false") + ",");
-        }
-        catch (Exception ex)
-        {
-            sb.Append("\"configPathError\":" + JS(ex.Message) + ",");
-        }
-
-        string configJson = null;
-        if (configPath != null && File.Exists(configPath))
-        {
-            try
-            {
-                configJson = File.ReadAllText(configPath);
-                sb.Append("\"configRaw\":" + JS(configJson) + ",");
-            }
-            catch (Exception ex)
-            {
-                sb.Append("\"configReadError\":" + JS(ex.Message) + ",");
-            }
-        }
-
-        if (configJson != null)
-        {
-            try
-            {
-                var servers = ParseServers(configJson);
-                sb.Append("\"parsedServers\":[");
-                for (int i = 0; i < servers.Length; i++)
-                {
-                    if (i > 0) sb.Append(",");
-                    sb.Append("{\"name\":"   + JS(servers[i].Name)   +
-                              ",\"host\":"   + JS(servers[i].Host)   +
-                              ",\"site\":"   + JS(servers[i].Site)   +
-                              ",\"port\":"   + servers[i].Port       +
-                              ",\"scheme\":" + JS(servers[i].Scheme) + "}");
-                }
-                sb.Append("],");
-
-                sb.Append("\"connectivityTests\":[");
-                for (int i = 0; i < servers.Length; i++)
-                {
-                    if (i > 0) sb.Append(",");
-                    var s       = servers[i];
-                    var scheme  = Nvl(s.Scheme, "https");
-                    var port    = s.Port > 0 ? s.Port : 443;
-                    var portSfx = ((port == 443 && scheme == "https") || (port == 80 && scheme == "http")) ? "" : ":" + port;
-                    var url     = scheme + "://" + s.Host + portSfx + "/";
-                    var result  = Probe(url, 5000, s.Host, port);
-                    sb.Append("{\"server\":" + JS(s.Name) + ",\"url\":" + JS(url) + ",\"result\":" + result + "}");
-                }
-                sb.Append("]");
-            }
-            catch (Exception ex)
-            {
-                sb.Append("\"parseError\":" + JS(ex.Message));
-            }
-        }
-        else
-        {
-            sb.Append("\"parsedServers\":null,\"connectivityTests\":null");
-        }
-
-        sb.Append("}");
-        ctx.Response.Write(sb.ToString());
-    }
-
     // ── Config ────────────────────────────────────────────────────────────────
 
     private static string ReadConfig(HttpContext ctx)
@@ -386,90 +370,7 @@ public class StatusCheck : IHttpHandler
             "config.json not found. Tried: [" + path + "] and [" + path2 + "]");
     }
 
-    // ── Minimal regex JSON parser ─────────────────────────────────────────────
-
-    private class ServerDef
-    {
-        public string Name;
-        public string Host;   // node IP — TCP connection target
-        public string Site;   // public hostname — used for SNI and Host: header
-        public int    Port;
-        public string Scheme;
-        public int    TimeoutMs;
-    }
-
-    private static ServerDef FindServer(string json, string name)
-    {
-        var all = ParseServers(json);
-        foreach (var s in all)
-            if (string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))
-                return s;
-        return null;
-    }
-
-    private static ServerDef[] ParseServers(string json)
-    {
-        var timeoutMs = 8000;
-        var tm = Regex.Match(json, "\"timeoutMs\"\\s*:\\s*(\\d+)");
-        if (tm.Success) timeoutMs = int.Parse(tm.Groups[1].Value);
-
-        // Extract top-level "site" value
-        var siteMatch = Regex.Match(json, "\"site\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        var site = siteMatch.Success ? siteMatch.Groups[1].Value : null;
-
-        var arrMatch = Regex.Match(json, "\"servers\"\\s*:\\s*(\\[.*?\\])", RegexOptions.Singleline);
-        if (!arrMatch.Success)
-            throw new InvalidOperationException("Could not find \"servers\" array in config.json");
-
-        var block   = arrMatch.Groups[1].Value;
-        var objects = SplitObjects(block);
-        var results = new List<ServerDef>();
-
-        foreach (var obj in objects)
-        {
-            results.Add(new ServerDef
-            {
-                Name      = JStr(obj, "name"),
-                Host      = JStr(obj, "host"),  // IP
-                Site      = site,               // public hostname from top-level "site"
-                Port      = JInt(obj, "port", 443),
-                Scheme    = Nvl(JStr(obj, "scheme"), "https"),
-                TimeoutMs = timeoutMs
-            });
-        }
-        return results.ToArray();
-    }
-
-    private static List<string> SplitObjects(string block)
-    {
-        var list  = new List<string>();
-        int depth = 0, start = -1;
-        for (int i = 0; i < block.Length; i++)
-        {
-            if      (block[i] == '{') { if (depth++ == 0) start = i; }
-            else if (block[i] == '}') { if (--depth == 0 && start >= 0) { list.Add(block.Substring(start, i - start + 1)); start = -1; } }
-        }
-        return list;
-    }
-
-    private static string JStr(string obj, string key)
-    {
-        var m = Regex.Match(obj, "\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        return m.Success ? Regex.Unescape(m.Groups[1].Value) : null;
-    }
-
-    private static int JInt(string obj, string key, int def)
-    {
-        var m = Regex.Match(obj, "\"" + key + "\"\\s*:\\s*(\\d+)");
-        return m.Success ? int.Parse(m.Groups[1].Value) : def;
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static string Nvl(string a, string b)
-    {
-        return string.IsNullOrEmpty(a) ? b : a;
-    }
 
     private static string JS(string s)
     {
