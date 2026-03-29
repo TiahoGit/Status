@@ -228,17 +228,22 @@ public class StatusCheck : IHttpHandler
             return;
         }
 
-        // Extract basePath and autoRefreshSeconds from raw config
+        // Extract basePath, autoRefreshSeconds and logo from raw config
         var basePathMatch = Regex.Match(configJson, "\"basePath\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
         var basePath      = basePathMatch.Success ? basePathMatch.Groups[1].Value : "";
 
         var autoMatch = Regex.Match(configJson, "\"autoRefreshSeconds\"\\s*:\\s*(\\d+)");
         var autoSecs  = autoMatch.Success ? autoMatch.Groups[1].Value : "60";
 
+        var logoMatch = Regex.Match(configJson, "\"logo\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        var logo      = logoMatch.Success ? logoMatch.Groups[1].Value : null;
+
         var sb = new StringBuilder();
         sb.Append("{");
         sb.Append("\"basePath\":"          + JS(basePath) + ",");
         sb.Append("\"autoRefreshSeconds\":" + autoSecs    + ",");
+        if (logo != null)
+            sb.Append("\"logo\":"          + JS(logo)     + ",");
 
         // Server names only — no IPs, no hostnames
         sb.Append("\"servers\":[");

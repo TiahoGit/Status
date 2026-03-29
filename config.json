@@ -1,5 +1,6 @@
 {
   "site": "url.domain.com/optional-subfolder",
+  "logo": "https://example.com/logo.svg",
   "basePath": "",
   "autoRefreshSeconds": 60,
   "servers": [

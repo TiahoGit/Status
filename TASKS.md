@@ -1,9 +1,11 @@
 # Tasks
 
-## Pending
+## Completed
 
 ### #1 — Make logo configurable in config.json
 Add a logo configuration option to `config.json` so the logo URL (currently hardcoded to Jaama's CDN URL in `default.aspx`) can be specified in config instead. The `check.ashx?action=apps` endpoint should expose the logo URL to the browser, and `default.aspx` should use it dynamically.
+
+## Pending
 
 ---
 

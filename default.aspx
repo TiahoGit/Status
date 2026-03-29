@@ -141,10 +141,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
 <header>
   <div class="brand">
-    <!-- Jaama logo fetched from jaama.com — inverted in light mode via CSS -->
-    <img id="jaama-logo" class="brand-logo"
-         src="https://jaama.com/hubfs/%5BTHEME%5D%20Jaama%20Theme%20Files/Logos/Dark%20Logo.svg"
-         alt="Jaama">
+    <img id="jaama-logo" class="brand-logo" src="" alt="">
     <div class="brand-text">
       <span class="brand-sub">Infrastructure</span>
       <h1>Application Status</h1>
@@ -368,6 +365,10 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
       showBanner('err', 'Failed to load configuration: ' + e.message);
       btn.disabled = false; btn.textContent = '\u21BA Refresh'; running = false; return;
     }
+
+    var logoEl = document.getElementById('jaama-logo');
+    if (CFG.logo) { logoEl.src = CFG.logo; logoEl.alt = CFG.logo; logoEl.style.display = ''; }
+    else          { logoEl.style.display = 'none'; }
 
     buildHeader(CFG.servers);
     buildRows(CFG.applications, CFG.servers);
