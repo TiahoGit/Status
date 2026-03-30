@@ -1,5 +1,46 @@
 # Tasks
 
+## Outstanding
+
+### #8 — Company branding: name, logo fallback, and website link
+Extend the branding config for both the hosting company and the customer company.
+
+Each company should support:
+- `name` — display name shown in the header
+- `logo` — logo image URL (existing `logoHosting` / `logoCustomer` fields)
+- `website` — URL to navigate to when the logo or name is clicked
+
+Behaviour:
+- If a logo is provided, display the logo; if not, display the name as text
+- If a website is provided, wrap the logo/name in a link (`<a href="...">`) that opens in a new tab
+- If neither logo nor name is provided for a company, render nothing for that slot
+
+Config shape (proposed):
+```json
+{
+  "hosting": {
+    "name": "Hosting Co",
+    "logo": "https://example.com/hosting-logo.svg",
+    "website": "https://hostingco.com"
+  },
+  "customer": {
+    "name": "Customer Ltd",
+    "logo": "https://example.com/customer-logo.svg",
+    "website": "https://customerltd.com"
+  }
+}
+```
+
+Backward compatibility: existing `logoHosting` and `logoCustomer` flat fields should still work (fall back to them if the nested objects are absent).
+
+Scope:
+- `config.json` / `config.sample.json`: add new nested branding fields
+- `App_Code/ConfigParser.cs` / inlined copy in `check.ashx`: parse new fields
+- `check.ashx`: expose name and website via `?action=apps`
+- `default.aspx`: update header to use name/logo/website with fallback logic
+- `test-harness/index.html`: update mock config and header rendering
+- `tests/ConfigParserTests.cs`: add tests for new parser methods
+
 ## Completed
 
 ### #1 — Make logo configurable in config.json
