@@ -4,6 +4,7 @@ Code explanations for the TiahoGit/Status application health dashboard.
 
 | File | Explains |
 |------|---------|
+| [config-json.md](config-json.md) | Configuration file — every field, default values, branding, servers, apps |
 | [check-ashx.md](check-ashx.md) | Server-side handler — config endpoint, probe endpoint, security |
 | [ConfigParser.md](ConfigParser.md) | JSON config parser — all parsing methods and data structures |
 | [HttpProbe.md](HttpProbe.md) | HTTP health-check probe — request logic, redirect following, status classification |
