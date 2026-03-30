@@ -2,46 +2,22 @@
 
 ## Outstanding
 
-### #8 — Company branding: name, logo fallback, and website link
-Extend the branding config for both the hosting company and the customer company.
-
-Each company should support:
-- `name` — display name shown in the header
-- `logo` — logo image URL (existing `logoHosting` / `logoCustomer` fields)
-- `website` — URL to navigate to when the logo or name is clicked
-
-Behaviour:
-- If a logo is provided, display the logo; if not, display the name as text
-- If a website is provided, wrap the logo/name in a link (`<a href="...">`) that opens in a new tab
-- If neither logo nor name is provided for a company, render nothing for that slot
-
-Config shape (proposed):
-```json
-{
-  "hosting": {
-    "name": "Hosting Co",
-    "logo": "https://example.com/hosting-logo.svg",
-    "website": "https://hostingco.com"
-  },
-  "customer": {
-    "name": "Customer Ltd",
-    "logo": "https://example.com/customer-logo.svg",
-    "website": "https://customerltd.com"
-  }
-}
-```
-
-Backward compatibility: existing `logoHosting` and `logoCustomer` flat fields should still work (fall back to them if the nested objects are absent).
-
-Scope:
-- `config.json` / `config.sample.json`: add new nested branding fields
-- `App_Code/ConfigParser.cs` / inlined copy in `check.ashx`: parse new fields
-- `check.ashx`: expose name and website via `?action=apps`
-- `default.aspx`: update header to use name/logo/website with fallback logic
-- `test-harness/index.html`: update mock config and header rendering
-- `tests/ConfigParserTests.cs`: add tests for new parser methods
-
 ## Completed
+
+### #9 — Mobile-responsive layout for header and app table
+- `default.aspx` / `test-harness/index.html`: all changes scoped to `@media(max-width:767px)` — desktop unchanged
+- Header stacks vertically; controls become a horizontal strip (theme toggle + refresh left, auto-refresh right, last-checked full-width below)
+- `h1` scaled to 18px, logos capped at 28px, body padding reduced to 1rem
+- App table replaced with card-per-app layout: `thead` hidden, each row becomes a bordered card with server results as labelled rows (`data-server` + CSS `::before`) and an Overall row at the bottom
+- Pills drop fixed `min-width` on mobile; app path wraps instead of forcing overflow
+
+### #8 — Company branding: name, logo fallback, and website link
+- `config.json` / `config.sample.json`: added nested `hosting` and `customer` objects with `name`, `logo`, `website`
+- `src/ConfigParser.cs` / inlined in `check.ashx`: added `BrandingDef` class, `ParseBranding()`, `ExtractObject()` with legacy fallback to `logoHosting`/`logoCustomer`
+- `check.ashx`: exposes `hosting` and `customer` objects via `?action=apps`
+- `default.aspx`: header brand slots render logo if present, name as text fallback, wrapped in link if website set
+- `test-harness/index.html`: mock config and rendering updated to match
+- `tests/ConfigParserTests.cs`: 7 new tests (59 total)
 
 ### #1 — Make logo configurable in config.json
 Add a logo configuration option to `config.json` so the logo URL (currently hardcoded to Jaama's CDN URL in `default.aspx`) can be specified in config instead. The `check.ashx?action=apps` endpoint should expose the logo URL to the browser, and `default.aspx` should use it dynamically.
