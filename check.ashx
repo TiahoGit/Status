@@ -99,9 +99,13 @@ public class StatusCheck : IHttpHandler
         var path    = appPath.StartsWith("/") ? appPath : "/" + appPath;
         path        = Regex.Replace(path, "/+", "/");
 
-        var target = scheme + "://" + server.Site + portSfx + path;
+        // Use the node host (IP or DNS name) in the URL so the TCP connection goes directly
+        // to that server, bypassing DNS/ARR load balancing.  The public site hostname is
+        // passed as the Host header so IIS routes to the correct virtual site.
+        var nodeHost = !string.IsNullOrEmpty(server.Host) ? server.Host : server.Site;
+        var target   = scheme + "://" + nodeHost + portSfx + path;
 
-        ctx.Response.Write(FormatResult(HttpProbe.Probe(target, server.TimeoutMs, server.Host, port)));
+        ctx.Response.Write(FormatResult(HttpProbe.Probe(target, server.TimeoutMs, server.Site, port)));
     }
 
     // ── Safe config endpoint — browser-facing, no internal details ───────────
@@ -248,7 +252,7 @@ public class StatusCheck : IHttpHandler
                     var portSfx = ((port == 443 && scheme == "https") || (port == 80 && scheme == "http")) ? "" : ":" + port;
                     var url     = scheme + "://" + s.Host + portSfx + "/";
                     sb.Append("{\"server\":" + JS(s.Name) + ",\"url\":" + JS(url) +
-                              ",\"result\":"  + FormatResult(HttpProbe.Probe(url, 5000, s.Host, port)) + "}");
+                              ",\"result\":"  + FormatResult(HttpProbe.Probe(url, 5000, s.Site, port)) + "}");
                 }
                 sb.Append("]");
             }
@@ -527,20 +531,20 @@ public static class HttpProbe
         public string Location;
     }
 
-    public static Result Probe(string url, int timeoutMs, string nodeIp, int port)
+    public static Result Probe(string url, int timeoutMs, string hostHeader, int port)
     {
-        var r = DoRequest(url, "HEAD", timeoutMs, nodeIp, port);
+        var r = DoRequest(url, "HEAD", timeoutMs, hostHeader, port);
         if (!r.NetworkError && (r.StatusCode == 405 || r.StatusCode == 501))
-            r = DoRequest(url, "GET", timeoutMs, nodeIp, port);
+            r = DoRequest(url, "GET", timeoutMs, hostHeader, port);
         if (!r.NetworkError && (r.StatusCode == 301 || r.StatusCode == 302) && r.Location != null)
         {
-            var r2 = DoRequest(r.Location, "GET", timeoutMs, nodeIp, port);
+            var r2 = DoRequest(r.Location, "GET", timeoutMs, hostHeader, port);
             if (!r2.NetworkError) return ToResult(r2);
         }
         return ToResult(r);
     }
 
-    private static RawResult DoRequest(string url, string method, int timeoutMs, string nodeIp, int port)
+    private static RawResult DoRequest(string url, string method, int timeoutMs, string hostHeader, int port)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -557,20 +561,8 @@ public static class HttpProbe
             req.Timeout           = timeoutMs;
             req.AllowAutoRedirect = false;
 
-            if (!string.IsNullOrEmpty(nodeIp))
-            {
-                IPAddress ip;
-                if (IPAddress.TryParse(nodeIp, out ip))
-                {
-                    try
-                    {
-                        var endpoint = new IPEndPoint(ip, port);
-                        req.ServicePoint.BindIPEndPointDelegate =
-                            delegate(ServicePoint sp, IPEndPoint rem, int retryCount) { return endpoint; };
-                    }
-                    catch (PlatformNotSupportedException) { }
-                }
-            }
+            if (!string.IsNullOrEmpty(hostHeader))
+                req.Host = hostHeader;
 
             using (var resp = (HttpWebResponse)req.GetResponse())
             {

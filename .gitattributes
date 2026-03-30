@@ -1,0 +1,2 @@
+# Keep each branch's own CLAUDE.md during merges — do not overwrite with the other branch's version.
+CLAUDE.md merge=ours
