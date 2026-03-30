@@ -125,7 +125,30 @@ td{padding:.65rem 1rem;vertical-align:middle}
 footer{margin-top:2.5rem;padding-top:1.25rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
 footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .harness-badge{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.30);color:#3b82f6}
-@media(max-width:640px){.summary-bar{grid-template-columns:1fr 1fr}}
+@media(max-width:767px){
+  body{padding:1rem 1rem 3rem}
+  header{flex-direction:column;gap:.75rem}
+  h1{font-size:18px}
+  .brand-logo{height:28px}
+  .header-right{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;width:100%;gap:8px}
+  .header-controls{order:1}
+  .auto-row{order:2}
+  .last-checked{order:3;width:100%}
+  .summary-bar{grid-template-columns:1fr 1fr}
+  thead{display:none}
+  .table-wrap{overflow-x:visible}
+  table,tbody,tr,td{display:block}
+  tbody tr{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:.75rem;padding:.75rem}
+  tbody tr:last-child{margin-bottom:0}
+  tbody tr:hover{background:var(--surface)}
+  td{padding:.2rem 0;border:none}
+  .td-app{white-space:normal;word-break:break-all;padding-bottom:.625rem;margin-bottom:.375rem;border-bottom:1px solid var(--border)}
+  .td-srv{display:flex;align-items:center;justify-content:space-between;padding:.25rem 0}
+  .td-srv::before{content:attr(data-server);font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .td-ov{display:flex;align-items:center;justify-content:space-between;padding-top:.625rem;margin-top:.25rem;border-top:1px solid var(--border)}
+  .td-ov::before{content:'Overall';font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .pill{min-width:0}
+}
 </style>
 </head>
 <body>
@@ -357,8 +380,8 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
       var displayPath = joinPath(CFG.sitePrefix + CFG.basePath, app.path);
       var label = app.label ? '<span class="app-label">' + esc(app.label) + '</span>' : '';
       var tds = '<td class="td-app"><a href="' + esc(displayPath) + '" target="_blank">' + esc(displayPath) + '</a>' + label + '</td>';
-      servers.forEach(function (_, si) {
-        tds += '<td class="td-srv" id="c-' + ai + '-' + si + '"><span class="pill p-pend"><span class="pdot"></span>&#8230;</span></td>';
+      servers.forEach(function (s, si) {
+        tds += '<td class="td-srv" id="c-' + ai + '-' + si + '" data-server="' + esc(s.name) + '"><span class="pill p-pend"><span class="pdot"></span>&#8230;</span></td>';
       });
       tds += '<td class="td-ov" id="ov-' + ai + '"><span class="ob ob-pend">&#8230;</span></td>';
       return '<tr>' + tds + '</tr>';
