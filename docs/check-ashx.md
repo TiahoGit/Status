@@ -71,8 +71,8 @@ Browser
   └─ GET check.ashx?server=APP8-N1&path=/Key2
        └─ Validate params
        └─ Read config.json
-       └─ FindServer("APP8-N1") → ServerDef { Host, Site, Port, ... }
-       └─ Build URL: https://app8-n1.internal:443/Key2
+       └─ FindServer("APP1-N1") → ServerDef { Host, Site, Port, ... }
+       └─ Build URL: https://app1-n1.internal:443/App1
             Host header: public-site.example.com
        └─ HttpProbe.Probe(url, timeoutMs, hostHeader)
             └─ HEAD → fallback GET if 405/501
