@@ -8,8 +8,8 @@
 
   <!-- Include shared source directly so tests always compile against the same code -->
   <ItemGroup>
-    <Compile Include="../App_Code/ConfigParser.cs" />
-    <Compile Include="../App_Code/HttpProbe.cs" />
+    <Compile Include="../src/ConfigParser.cs" />
+    <Compile Include="../src/HttpProbe.cs" />
   </ItemGroup>
 
   <ItemGroup>

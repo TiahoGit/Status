@@ -32,25 +32,27 @@ public static class HttpProbe
 
     // ── Public entry point ────────────────────────────────────────────────────
 
-    /// <param name="url">Full URL to probe (hostname used for SNI / Host: header).</param>
+    /// <param name="url">Full URL to probe — hostname should be the node IP or node DNS name
+    ///   so the TCP connection goes directly to that server, bypassing load balancers.</param>
     /// <param name="timeoutMs">Per-request timeout in milliseconds.</param>
-    /// <param name="nodeIp">
-    ///   Optional IP address to pin the TCP connection to, bypassing DNS.
-    ///   Pass null to use normal DNS resolution (required for .NET 5+ and tests).
+    /// <param name="hostHeader">
+    ///   Optional value to set as the HTTP Host header, overriding the URL hostname.
+    ///   Use this to send the public site hostname for IIS virtual-host routing / SNI
+    ///   when the URL contains a node IP. Pass null to use the URL hostname as-is.
     /// </param>
-    /// <param name="port">TCP port — used only when nodeIp is set.</param>
-    public static Result Probe(string url, int timeoutMs, string nodeIp, int port)
+    /// <param name="port">Reserved for future use; pass 0.</param>
+    public static Result Probe(string url, int timeoutMs, string hostHeader, int port)
     {
-        var r = DoRequest(url, "HEAD", timeoutMs, nodeIp, port);
+        var r = DoRequest(url, "HEAD", timeoutMs, hostHeader, port);
 
         // Some servers reject HEAD — fall back to GET
         if (!r.NetworkError && (r.StatusCode == 405 || r.StatusCode == 501))
-            r = DoRequest(url, "GET", timeoutMs, nodeIp, port);
+            r = DoRequest(url, "GET", timeoutMs, hostHeader, port);
 
         // Follow a single redirect (301/302) — IIS often redirects /app -> /app/
         if (!r.NetworkError && (r.StatusCode == 301 || r.StatusCode == 302) && r.Location != null)
         {
-            var r2 = DoRequest(r.Location, "GET", timeoutMs, nodeIp, port);
+            var r2 = DoRequest(r.Location, "GET", timeoutMs, hostHeader, port);
             if (!r2.NetworkError) return ToResult(r2);
         }
 
@@ -59,7 +61,7 @@ public static class HttpProbe
 
     // ── HTTP request ──────────────────────────────────────────────────────────
 
-    private static RawResult DoRequest(string url, string method, int timeoutMs, string nodeIp, int port)
+    private static RawResult DoRequest(string url, string method, int timeoutMs, string hostHeader, int port)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -79,26 +81,10 @@ public static class HttpProbe
             req.Timeout           = timeoutMs;
             req.AllowAutoRedirect = false;
 
-            // Pin TCP connection to the node IP — SNI hostname comes from the URL so
-            // the TLS handshake and Host: header both use the public hostname correctly.
-            // BindIPEndPointDelegate is .NET Framework only; skipped on .NET 5+.
-            if (!string.IsNullOrEmpty(nodeIp))
-            {
-                IPAddress ip;
-                if (IPAddress.TryParse(nodeIp, out ip))
-                {
-                    try
-                    {
-                        var endpoint = new IPEndPoint(ip, port);
-                        req.ServicePoint.BindIPEndPointDelegate =
-                            delegate(ServicePoint sp, IPEndPoint rem, int retryCount)
-                            {
-                                return endpoint;
-                            };
-                    }
-                    catch (PlatformNotSupportedException) { /* .NET 5+ — skip */ }
-                }
-            }
+            // Override the Host header so IIS routes to the correct virtual site
+            // when the URL contains a node IP rather than the public hostname.
+            if (!string.IsNullOrEmpty(hostHeader))
+                req.Host = hostHeader;
 
             using (var resp = (HttpWebResponse)req.GetResponse())
             {

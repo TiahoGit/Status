@@ -40,10 +40,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 /* ── header ── */
 header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:2rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border);gap:1rem;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:14px}
-.brand-logo{flex-shrink:0;height:36px;width:auto;transition:filter .2s}
+.brand-slot{display:flex;align-items:center;flex-shrink:0}
+.brand-slot a{display:flex;align-items:center;text-decoration:none}
+.brand-logo{height:36px;width:auto;transition:filter .2s}
 /* Dark logo SVG is white-on-transparent — invert to black for light mode */
 [data-theme="light"]  .brand-logo{filter:invert(1)}
 [data-theme="dark"]   .brand-logo{filter:none}
+.brand-name{font-size:15px;font-weight:500;color:var(--text)}
 .brand-text{display:flex;flex-direction:column;gap:3px}
 .brand-divider{width:1px;height:36px;background:var(--border-strong);flex-shrink:0}
 .brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
@@ -134,7 +137,40 @@ td{padding:.65rem 1rem;vertical-align:middle}
 footer{margin-top:2.5rem;padding-top:1.25rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
 footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
-@media(max-width:640px){.summary-bar{grid-template-columns:1fr 1fr}}
+@media(max-width:767px){
+  /* M2 — reduce side padding */
+  body{padding:1rem 1rem 3rem}
+
+  /* H1 — stack header vertically; controls become a horizontal strip */
+  header{flex-direction:column;gap:.75rem}
+  /* M3 — scale down title and logos */
+  h1{font-size:18px}
+  .brand-logo{height:28px}
+  .header-right{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;width:100%;gap:8px}
+  .header-controls{order:1}
+  .auto-row{order:2}
+  .last-checked{order:3;width:100%}
+
+  /* H3 — summary bar 2-col */
+  .summary-bar{grid-template-columns:1fr 1fr}
+
+  /* H2 — table → card-per-app layout */
+  thead{display:none}
+  .table-wrap{overflow-x:visible}
+  table,tbody,tr,td{display:block}
+  tbody tr{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:.75rem;padding:.75rem}
+  tbody tr:last-child{margin-bottom:0}
+  tbody tr:hover{background:var(--surface)}
+  td{padding:.2rem 0;border:none}
+  /* M4 — app path wraps on mobile */
+  .td-app{white-space:normal;word-break:break-all;padding-bottom:.625rem;margin-bottom:.375rem;border-bottom:1px solid var(--border)}
+  .td-srv{display:flex;align-items:center;justify-content:space-between;padding:.25rem 0}
+  .td-srv::before{content:attr(data-server);font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .td-ov{display:flex;align-items:center;justify-content:space-between;padding-top:.625rem;margin-top:.25rem;border-top:1px solid var(--border)}
+  .td-ov::before{content:'Overall';font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  /* M1 — pills don't need fixed width in card layout */
+  .pill{min-width:0}
+}
 </style>
 </head>
 <body>
@@ -142,13 +178,13 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
 <header>
   <div class="brand">
-    <img id="logo-hosting" class="brand-logo" src="" alt="" style="display:none">
+    <div id="brand-hosting" class="brand-slot" style="display:none"></div>
     <div class="brand-text">
       <span class="brand-sub">Infrastructure</span>
       <h1>Application Status</h1>
     </div>
     <div class="brand-divider" id="logo-divider" style="display:none"></div>
-    <img id="logo-customer" class="brand-logo" src="" alt="" style="display:none">
+    <div id="brand-customer" class="brand-slot" style="display:none"></div>
   </div>
 
   <div class="header-right">
@@ -207,6 +243,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 </div>
 
 <footer>
+  <span id="footer-version"></span>
   <span id="footer-host"></span>
 </footer>
 
@@ -253,15 +290,6 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
     if (!Array.isArray(d.servers)      || !d.servers.length)      throw new Error('"servers" missing from app config');
     if (!Array.isArray(d.applications) || !d.applications.length) throw new Error('"applications" missing from app config');
     d.basePath = (d.basePath || '').replace(/\/+$/, '');
-
-    // Derive site path prefix from current URL (e.g. /test/Status/default.aspx -> /test)
-    // Used ONLY for display links — probe paths must NOT include this prefix
-    // as the backend nodes are not aware of the front-end routing path
-    var loc = window.location.pathname;
-    var statusIdx = loc.toLowerCase().lastIndexOf('/status/');
-    if (statusIdx === -1) statusIdx = loc.toLowerCase().lastIndexOf('/status');
-    d.sitePrefix = statusIdx > 0 ? loc.substring(0, statusIdx).replace(/\/+$/, '') : '';
-
     return d;
   }
 
@@ -279,13 +307,11 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
   function buildRows(apps, servers) {
     var tb = document.getElementById('tbody');
     tb.innerHTML = apps.map(function (app, ai) {
-      // Display link includes sitePrefix (e.g. /test/Key2)
-      // Probe path uses basePath only (e.g. /Key2) — backend nodes don't know about /test
-      var displayPath = joinPath(CFG.sitePrefix + CFG.basePath, app.path);
+      var displayPath = joinPath(CFG.basePath, app.path);
       var label = app.label ? '<span class="app-label">' + esc(app.label) + '</span>' : '';
       var tds = '<td class="td-app"><a href="' + esc(displayPath) + '" target="_blank">' + esc(displayPath) + '</a>' + label + '</td>';
-      servers.forEach(function (_, si) {
-        tds += '<td class="td-srv" id="c-' + ai + '-' + si + '"><span class="pill p-pend"><span class="pdot"></span>&#8230;</span></td>';
+      servers.forEach(function (s, si) {
+        tds += '<td class="td-srv" id="c-' + ai + '-' + si + '" data-server="' + esc(s.name) + '"><span class="pill p-pend"><span class="pdot"></span>&#8230;</span></td>';
       });
       tds += '<td class="td-ov" id="ov-' + ai + '"><span class="ob ob-pend">&#8230;</span></td>';
       return '<tr>' + tds + '</tr>';
@@ -369,14 +395,14 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
       btn.disabled = false; btn.textContent = '\u21BA Refresh'; running = false; return;
     }
 
-    var hostingEl  = document.getElementById('logo-hosting');
-    var customerEl = document.getElementById('logo-customer');
-    var dividerEl  = document.getElementById('logo-divider');
-    if (CFG.logoHosting)  { hostingEl.src  = CFG.logoHosting;  hostingEl.style.display  = ''; }
-    else                  { hostingEl.style.display  = 'none'; }
-    if (CFG.logoCustomer) { customerEl.src = CFG.logoCustomer; customerEl.style.display = ''; }
-    else                  { customerEl.style.display = 'none'; }
-    dividerEl.style.display = (CFG.logoHosting && CFG.logoCustomer) ? '' : 'none';
+    var versionEl = document.getElementById('footer-version');
+    versionEl.textContent = CFG.version ? 'v' + CFG.version : '';
+
+    renderBrandSlot('brand-hosting',  CFG.hosting);
+    renderBrandSlot('brand-customer', CFG.customer);
+    var hostingVisible  = !!(CFG.hosting  && (CFG.hosting.logo  || CFG.hosting.name));
+    var customerVisible = !!(CFG.customer && (CFG.customer.logo || CFG.customer.name));
+    document.getElementById('logo-divider').style.display = (hostingVisible && customerVisible) ? '' : 'none';
 
     buildHeader(CFG.servers);
     buildRows(CFG.applications, CFG.servers);
@@ -418,6 +444,17 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  function renderBrandSlot(id, b) {
+    var el = document.getElementById(id);
+    if (!b || (!b.logo && !b.name)) { el.style.display = 'none'; return; }
+    var inner = b.logo
+      ? '<img class="brand-logo" src="' + esc(b.logo) + '" alt="' + esc(b.name || '') + '">'
+      : '<span class="brand-name">'     + esc(b.name) + '</span>';
+    if (b.website) inner = '<a href="' + esc(b.website) + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>';
+    el.innerHTML = inner;
+    el.style.display = '';
+  }
+
   function showBanner(t, m) { var e = document.getElementById('banner-' + t); e.textContent = m; e.style.display = 'block'; }
   function hideBanner(t)    { document.getElementById('banner-' + t).style.display = 'none'; }
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -428,6 +465,8 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
   document.getElementById('footer-host').textContent = window.location.hostname + window.location.pathname;
   runChecks();
+
+  // Version is set after config loads — see runChecks()
 
 }());
 </script>

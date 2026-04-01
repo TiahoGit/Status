@@ -18,6 +18,13 @@ public static class ConfigParser
         public int    TimeoutMs;
     }
 
+    public class BrandingDef
+    {
+        public string Name;
+        public string Logo;
+        public string Website;
+    }
+
     // ── Top-level scalar fields ───────────────────────────────────────────────
 
     /// <summary>
@@ -42,6 +49,14 @@ public static class ConfigParser
         return m.Success ? Unescape(m.Groups[1].Value) : null;
     }
 
+    /// <summary>Returns the version string, or null if absent or if json is null.</summary>
+    public static string ParseVersion(string json)
+    {
+        if (json == null) return null;
+        var m = Regex.Match(json, "\"version\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups[1].Value) : null;
+    }
+
     /// <summary>Returns basePath, or empty string if absent.</summary>
     public static string ParseBasePath(string json)
     {
@@ -54,6 +69,44 @@ public static class ConfigParser
     {
         var m = Regex.Match(json, "\"autoRefreshSeconds\"\\s*:\\s*(\\d+)");
         return m.Success ? int.Parse(m.Groups[1].Value) : 60;
+    }
+
+    // ── Branding ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses the nested branding object for the given key ("hosting" or "customer").
+    /// Falls back to legacy flat logo fields if the nested object is absent.
+    /// Returns null if no name, logo, or website can be found.
+    /// </summary>
+    public static BrandingDef ParseBranding(string json, string key)
+    {
+        var nested  = ExtractObject(json, key);
+        var name    = nested != null ? JStr(nested, "name")    : null;
+        var logo    = nested != null ? JStr(nested, "logo")    : null;
+        var website = nested != null ? JStr(nested, "website") : null;
+
+        if (logo == null)
+        {
+            if (key == "hosting")  logo = ParseLogoHosting(json);
+            if (key == "customer") logo = ParseLogoCustomer(json);
+        }
+
+        if (name == null && logo == null && website == null) return null;
+        return new BrandingDef { Name = name, Logo = logo, Website = website };
+    }
+
+    private static string ExtractObject(string json, string key)
+    {
+        var m = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\\{");
+        if (!m.Success) return null;
+        int start = m.Index + m.Length - 1;
+        int depth = 0;
+        for (int i = start; i < json.Length; i++)
+        {
+            if      (json[i] == '{') depth++;
+            else if (json[i] == '}') { if (--depth == 0) return json.Substring(start, i - start + 1); }
+        }
+        return null;
     }
 
     // ── Servers ───────────────────────────────────────────────────────────────
