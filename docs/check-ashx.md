@@ -26,8 +26,8 @@ Returns a JSON object for the browser dashboard to consume:
   "version": "1.0.24",
   "hosting":  { "name": "...", "logo": "...", "website": "..." },
   "customer": { "name": "...", "logo": "...", "website": "..." },
-  "servers": [ { "name": "APP8-N1" }, { "name": "APP8-N2" } ],
-  "applications": [ { "path": "/Key2", "label": "Key2" } ]
+  "servers": [ { "name": "APP1-N1" }, { "name": "APP1-N2" } ],
+  "applications": [ { "path": "/App1", "label": "App1" } ]
 }
 ```
 
