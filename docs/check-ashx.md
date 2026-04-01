@@ -35,7 +35,7 @@ Returns a JSON object for the browser dashboard to consume:
 
 ---
 
-### `GET check.ashx?server=APP8-N1&path=/Key2`
+### `GET check.ashx?server=APP1-N1&path=/App1`
 
 Probes a single app on a single server and returns:
 
