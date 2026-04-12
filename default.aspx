@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Application Status &mdash; Jaama</title>
+<title>Status</title>
+<link id="favicon" rel="icon" type="image/svg+xml">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -379,6 +380,21 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
     document.getElementById('sum-ok').textContent    = ok;
     document.getElementById('sum-warn').textContent  = warn;
     document.getElementById('sum-err').textContent   = err;
+    updateTabStatus(ok, warn, err);
+  }
+
+  function updateTabStatus(ok, warn, err) {
+    var color, prefix;
+    if      (err  > 0) { color = '#ef4444'; prefix = '\u2715 '; }
+    else if (warn > 0) { color = '#f59e0b'; prefix = '\u26A0 '; }
+    else               { color = '#22c55e'; prefix = ''; }
+    document.title = prefix + 'Status';
+    setFavicon(color);
+  }
+
+  function setFavicon(color) {
+    var svg = '<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 16\'><circle cx=\'8\' cy=\'8\' r=\'7\' fill=\'' + color + '\'/></svg>';
+    document.getElementById('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(svg);
   }
 
   // ── Main ───────────────────────────────────────────────────────────────────
@@ -464,6 +480,7 @@ footer span{font-family:var(--mono);font-size:10px;color:var(--muted)}
   window.toggleTheme = toggleTheme;
 
   document.getElementById('footer-host').textContent = window.location.hostname + window.location.pathname;
+  setFavicon('#6b7a99');
   runChecks();
 
   // Version is set after config loads — see runChecks()

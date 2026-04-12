@@ -11,6 +11,12 @@
 - App table replaced with card-per-app layout: `thead` hidden, each row becomes a bordered card with server results as labelled rows (`data-server` + CSS `::before`) and an Overall row at the bottom
 - Pills drop fixed `min-width` on mobile; app path wraps instead of forcing overflow
 
+### #8 — Dynamic page title and favicon reflecting overall health
+- `default.aspx`: `<title>` changed to `Status`; inline SVG favicon `<link>` added to `<head>`
+- `default.aspx`: `updateTabStatus(ok, warn, err)` and `setFavicon(color)` helpers added; called from `updateSummary()` after each probe completes
+- Grey neutral favicon set on page load before results arrive; updates to green / amber (`⚠`) / red (`✕`) once counts are known
+- `test-harness/index.html`: same changes applied; title becomes `Status — Test Harness` with the same prefix logic
+
 ### #8 — Company branding: name, logo fallback, and website link
 - `config.json` / `config.sample.json`: added nested `hosting` and `customer` objects with `name`, `logo`, `website`
 - `src/ConfigParser.cs` / inlined in `check.ashx`: added `BrandingDef` class, `ParseBranding()`, `ExtractObject()` with legacy fallback to `logoHosting`/`logoCustomer`
